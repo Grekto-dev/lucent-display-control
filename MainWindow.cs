@@ -681,9 +681,6 @@ namespace LucentControl {
         private Grid CreateTitleBar() {
             Grid tb = new Grid();
             tb.Background = new SolidColorBrush(Color.FromRgb(13, 16, 23));
-            tb.MouseDown += delegate(object s, MouseButtonEventArgs e) {
-                if (e.ChangedButton == MouseButton.Left) DragMove();
-            };
 
             tb.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
             tb.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
@@ -752,17 +749,16 @@ namespace LucentControl {
             Grid.SetColumn(centerSp, 1);
             tb.Children.Add(centerSp);
 
-            // Right: Standard Window Chrome Buttons
+            // Right: Standard Window Chrome Buttons (Minimize, Maximize, Close)
             StackPanel rightSp = new StackPanel();
             rightSp.Orientation = Orientation.Horizontal;
+            WindowChrome.SetIsHitTestVisibleInChrome(rightSp, true);
 
-            Button btnMin = CreateTitleBarBtn("🗕", delegate { WindowState = WindowState.Minimized; });
+            Button btnMin = CreateTitleBarBtn("🗕", delegate { WindowState = WindowState.Minimized; }, false);
             Button btnMax = CreateTitleBarBtn("🗖", delegate {
                 WindowState = (WindowState == WindowState.Maximized) ? WindowState.Normal : WindowState.Maximized;
-            });
-            Button btnClose = CreateTitleBarBtn("✕", delegate { Close(); });
-            btnClose.MouseEnter += delegate { btnClose.Background = new SolidColorBrush(Color.FromRgb(225, 29, 72)); };
-            btnClose.MouseLeave += delegate { btnClose.Background = Brushes.Transparent; };
+            }, false);
+            Button btnClose = CreateTitleBarBtn("✕", delegate { Close(); }, true);
 
             rightSp.Children.Add(btnMin);
             rightSp.Children.Add(btnMax);
@@ -773,16 +769,36 @@ namespace LucentControl {
             return tb;
         }
 
-        private Button CreateTitleBarBtn(string glyph, RoutedEventHandler handler) {
+        private Button CreateTitleBarBtn(string glyph, RoutedEventHandler handler, bool isClose) {
             Button b = new Button();
             b.Width = 46;
             b.Height = 48;
-            b.Background = Brushes.Transparent;
-            b.Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225));
-            b.BorderThickness = new Thickness(0);
-            b.Content = glyph;
-            b.FontSize = 11;
             b.Cursor = Cursors.Hand;
+            b.BorderThickness = new Thickness(0);
+            WindowChrome.SetIsHitTestVisibleInChrome(b, true);
+
+            ControlTemplate ct = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory border = new FrameworkElementFactory(typeof(Border), "btnBorder");
+            border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            border.SetValue(Border.SnapsToDevicePixelsProperty, true);
+
+            FrameworkElementFactory txt = new FrameworkElementFactory(typeof(TextBlock));
+            txt.SetValue(TextBlock.TextProperty, glyph);
+            txt.SetValue(TextBlock.FontSizeProperty, isClose ? 12.0 : 10.0);
+            txt.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(Color.FromRgb(203, 213, 225)));
+            txt.SetValue(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            txt.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            border.AppendChild(txt);
+
+            ct.VisualTree = border;
+
+            Trigger hoverTrig = new Trigger();
+            hoverTrig.Property = Button.IsMouseOverProperty;
+            hoverTrig.Value = true;
+            hoverTrig.Setters.Add(new Setter(Border.BackgroundProperty, isClose ? new SolidColorBrush(Color.FromRgb(225, 29, 72)) : new SolidColorBrush(Color.FromRgb(30, 41, 59)), "btnBorder"));
+            ct.Triggers.Add(hoverTrig);
+
+            b.Template = ct;
             b.Click += handler;
             return b;
         }
@@ -862,11 +878,30 @@ namespace LucentControl {
             Button b = new Button();
             b.Height = 40;
             b.Margin = new Thickness(0, 0, 0, 4);
-            b.BorderThickness = new Thickness(0);
             b.Cursor = Cursors.Hand;
             b.HorizontalContentAlignment = HorizontalAlignment.Left;
             b.Padding = new Thickness(12, 0, 12, 0);
 
+            ControlTemplate ct = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory border = new FrameworkElementFactory(typeof(Border), "navBorder");
+            border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+            border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+            border.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            cp.SetValue(ContentPresenter.MarginProperty, new TemplateBindingExtension(Button.PaddingProperty));
+            border.AppendChild(cp);
+            ct.VisualTree = border;
+            b.Template = ct;
+
+            SetSidebarBtnContent(b, icon, label, isSelected);
+            b.Click += click;
+            return b;
+        }
+
+        private void SetSidebarBtnContent(Button b, string icon, string label, bool isSelected) {
             StackPanel sp = new StackPanel();
             sp.Orientation = Orientation.Horizontal;
 
@@ -876,20 +911,22 @@ namespace LucentControl {
             iTb.FontSize = 15;
             iTb.Width = 24;
             iTb.VerticalAlignment = VerticalAlignment.Center;
+            iTb.Foreground = isSelected ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : new SolidColorBrush(Color.FromRgb(148, 163, 184));
             sp.Children.Add(iTb);
 
             TextBlock lTb = new TextBlock();
             lTb.Text = label;
             lTb.FontSize = 13;
-            lTb.FontWeight = FontWeights.Medium;
+            lTb.FontWeight = isSelected ? FontWeights.SemiBold : FontWeights.Medium;
             lTb.Margin = new Thickness(8, 0, 0, 0);
             lTb.VerticalAlignment = VerticalAlignment.Center;
+            lTb.Foreground = isSelected ? Brushes.White : new SolidColorBrush(Color.FromRgb(226, 232, 240));
             sp.Children.Add(lTb);
 
             b.Content = sp;
-            b.Click += click;
-            ApplySidebarBtnStyle(b, isSelected);
-            return b;
+            b.Background = isSelected ? new SolidColorBrush(Color.FromRgb(26, 36, 54)) : Brushes.Transparent;
+            b.BorderBrush = isSelected ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : Brushes.Transparent;
+            b.BorderThickness = isSelected ? new Thickness(3, 0, 0, 0) : new Thickness(0);
         }
 
         private void ApplySidebarBtnStyle(Button b, bool isSelected) {
@@ -900,7 +937,7 @@ namespace LucentControl {
                 b.BorderThickness = new Thickness(3, 0, 0, 0);
                 if (sp != null && sp.Children.Count >= 2) {
                     ((TextBlock)sp.Children[0]).Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
-                    ((TextBlock)sp.Children[1]).Foreground = new SolidColorBrush(Color.FromRgb(248, 250, 252));
+                    ((TextBlock)sp.Children[1]).Foreground = Brushes.White;
                     ((TextBlock)sp.Children[1]).FontWeight = FontWeights.SemiBold;
                 }
             } else {
@@ -908,7 +945,7 @@ namespace LucentControl {
                 b.BorderThickness = new Thickness(0);
                 if (sp != null && sp.Children.Count >= 2) {
                     ((TextBlock)sp.Children[0]).Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
-                    ((TextBlock)sp.Children[1]).Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+                    ((TextBlock)sp.Children[1]).Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240));
                     ((TextBlock)sp.Children[1]).FontWeight = FontWeights.Medium;
                 }
             }
@@ -3338,12 +3375,12 @@ namespace LucentControl {
             sidebarMonitorsCount.Text = I18n.T("MonitorsConnected", screenDevices.Count);
 
             // Nav buttons
-            btnNavDashboard.Content = CreateSidebarBtnContent("\uE80F", I18n.T("NavDashboard"));
-            btnNavMonitors.Content = CreateSidebarBtnContent("\uE7F4", I18n.T("NavMonitors"));
-            btnNavPresets.Content = CreateSidebarBtnContent("\uE74C", I18n.T("NavPresets"));
-            btnNavProfiles.Content = CreateSidebarBtnContent("\uE77B", I18n.T("NavProfiles"));
-            btnNavScheduler.Content = CreateSidebarBtnContent("\uE823", I18n.T("NavScheduler"));
-            btnNavSettings.Content = CreateSidebarBtnContent("\uE713", I18n.T("NavSettings"));
+            SetSidebarBtnContent(btnNavDashboard, "\uE80F", I18n.T("NavDashboard"), allViews == null || allViews[0].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavMonitors, "\uE7F4", I18n.T("NavMonitors"), allViews != null && allViews[1].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavPresets, "\uE74C", I18n.T("NavPresets"), allViews != null && allViews[2].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavProfiles, "\uE77B", I18n.T("NavProfiles"), allViews != null && allViews[3].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavScheduler, "\uE823", I18n.T("NavScheduler"), allViews != null && allViews[4].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavSettings, "\uE713", I18n.T("NavSettings"), allViews != null && allViews[5].Visibility == Visibility.Visible);
 
             // Dashboard
             mainTitle.Text = I18n.T("MonitorsTitle");
@@ -3419,28 +3456,6 @@ namespace LucentControl {
             if (lblSettingsSaveNotice != null) lblSettingsSaveNotice.Text = I18n.T("SavedNotice");
 
             UpdateTrayMenu();
-        }
-
-        private StackPanel CreateSidebarBtnContent(string icon, string label) {
-            StackPanel sp = new StackPanel();
-            sp.Orientation = Orientation.Horizontal;
-
-            TextBlock iTb = new TextBlock();
-            iTb.Text = icon;
-            iTb.FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol");
-            iTb.FontSize = 15;
-            iTb.Width = 24;
-            iTb.VerticalAlignment = VerticalAlignment.Center;
-            sp.Children.Add(iTb);
-
-            TextBlock lTb = new TextBlock();
-            lTb.Text = label;
-            lTb.FontSize = 13;
-            lTb.FontWeight = FontWeights.Medium;
-            lTb.Margin = new Thickness(8, 0, 0, 0);
-            lTb.VerticalAlignment = VerticalAlignment.Center;
-            sp.Children.Add(lTb);
-            return sp;
         }
 
         private void OnControlChanged() {
