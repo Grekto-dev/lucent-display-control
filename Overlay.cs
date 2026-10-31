@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using SWF = System.Windows.Forms;
 
 namespace LucentControl {
@@ -24,7 +25,6 @@ namespace LucentControl {
 
         private Rectangle dimRect;
         private Rectangle tintRect;
-        private Rectangle rgbRect;
 
         public ScreenOverlay(int left, int top, int width, int height) {
             WindowStyle = WindowStyle.None;
@@ -50,11 +50,6 @@ namespace LucentControl {
             tintRect.Opacity = 0.0;
             grid.Children.Add(tintRect);
 
-            rgbRect = new Rectangle();
-            rgbRect.Fill = Brushes.Black;
-            rgbRect.Opacity = 0.0;
-            grid.Children.Add(rgbRect);
-
             Content = grid;
 
             SourceInitialized += delegate {
@@ -67,10 +62,9 @@ namespace LucentControl {
         }
 
         public void ApplySettings(DisplaySettings s) {
-            // 1. Brightness overlay
+            // Brightness overlay (black for dimming, white for boost)
             if (s.Brightness < 1.0) {
                 dimRect.Fill = Brushes.Black;
-                // Scale from 1.0 down to 0.10 -> Opacity from 0.0 up to 0.90
                 dimRect.Opacity = Math.Min(0.92, Math.Max(0.0, (1.0 - s.Brightness) * 0.95));
             } else if (s.Brightness > 1.0) {
                 dimRect.Fill = Brushes.White;
@@ -79,7 +73,7 @@ namespace LucentControl {
                 dimRect.Opacity = 0.0;
             }
 
-            // 2. Color Temperature overlay
+            // Color Temperature tint
             if (s.Temperature < 6400.0) {
                 double factor = (6500.0 - s.Temperature) / (6500.0 - 2500.0);
                 tintRect.Fill = new SolidColorBrush(Color.FromRgb(255, 135, 15));
@@ -91,22 +85,60 @@ namespace LucentControl {
             } else {
                 tintRect.Opacity = 0.0;
             }
+        }
+    }
 
-            // 3. RGB Channel Tinting
-            double rLoss = Math.Max(0.0, 1.0 - s.Red);
-            double gLoss = Math.Max(0.0, 1.0 - s.Green);
-            double bLoss = Math.Max(0.0, 1.0 - s.Blue);
+    public class IdentifyOverlay : Window {
+        public IdentifyOverlay(int monNumber, string resolution, SWF.Screen screen) {
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Topmost = true;
+            ShowInTaskbar = false;
+            Focusable = false;
+            Background = Brushes.Transparent;
 
-            if (rLoss > 0.05 || gLoss > 0.05 || bLoss > 0.05) {
-                // Complementary tinting
-                byte tintR = (byte)Math.Round(rLoss * 180.0);
-                byte tintG = (byte)Math.Round(gLoss * 180.0);
-                byte tintB = (byte)Math.Round(bLoss * 180.0);
-                rgbRect.Fill = new SolidColorBrush(Color.FromRgb((byte)(255 - tintR), (byte)(255 - tintG), (byte)(255 - tintB)));
-                rgbRect.Opacity = Math.Min(0.40, Math.Max(rLoss, Math.Max(gLoss, bLoss)) * 0.35);
-            } else {
-                rgbRect.Opacity = 0.0;
-            }
+            Width = 240;
+            Height = 240;
+            Left = screen.Bounds.X + (screen.Bounds.Width - Width) / 2;
+            Top = screen.Bounds.Y + (screen.Bounds.Height - Height) / 2;
+
+            Border card = new Border();
+            card.CornerRadius = new CornerRadius(20);
+            card.Background = new SolidColorBrush(Color.FromArgb(235, 15, 23, 42));
+            card.BorderBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            card.BorderThickness = new Thickness(3);
+            card.Padding = new Thickness(16);
+
+            StackPanel sp = new StackPanel();
+            sp.VerticalAlignment = VerticalAlignment.Center;
+            sp.HorizontalAlignment = HorizontalAlignment.Center;
+
+            TextBlock numTb = new TextBlock();
+            numTb.Text = monNumber.ToString();
+            numTb.FontSize = 84;
+            numTb.FontWeight = FontWeights.Bold;
+            numTb.Foreground = Brushes.White;
+            numTb.HorizontalAlignment = HorizontalAlignment.Center;
+            sp.Children.Add(numTb);
+
+            TextBlock resTb = new TextBlock();
+            resTb.Text = resolution;
+            resTb.FontSize = 14;
+            resTb.FontWeight = FontWeights.SemiBold;
+            resTb.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            resTb.HorizontalAlignment = HorizontalAlignment.Center;
+            sp.Children.Add(resTb);
+
+            card.Child = sp;
+            Content = card;
+
+            DispatcherTimer timer = new DispatcherTimer();
+            timer.Interval = TimeSpan.FromSeconds(2.5);
+            timer.Tick += delegate {
+                timer.Stop();
+                Close();
+            };
+            timer.Start();
         }
     }
 
@@ -140,6 +172,20 @@ namespace LucentControl {
             foreach (var kvp in overlays) {
                 kvp.Value.ApplySettings(s);
             }
+        }
+
+        public void ShowIdentifyBadges(List<ScreenDevice> devices) {
+            try {
+                foreach (ScreenDevice dev in devices) {
+                    foreach (SWF.Screen scr in SWF.Screen.AllScreens) {
+                        if (scr.DeviceName == dev.DeviceName) {
+                            IdentifyOverlay idOv = new IdentifyOverlay(dev.Number, dev.ResolutionText, scr);
+                            idOv.Show();
+                            break;
+                        }
+                    }
+                }
+            } catch { }
         }
 
         public void CloseAll() {

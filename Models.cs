@@ -49,23 +49,95 @@ namespace LucentControl {
         }
     }
 
+    public static class DwmEngine {
+        [DllImport("magnification.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool MagInitialize();
+
+        [DllImport("magnification.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool MagUninitialize();
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MAGCOLOREFFECT {
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 25)]
+            public float[] transform;
+        }
+
+        [DllImport("magnification.dll", CallingConvention = CallingConvention.StdCall)]
+        public static extern bool MagSetFullscreenColorEffect(ref MAGCOLOREFFECT pEffect);
+
+        private static bool isInitialized = false;
+
+        public static void Apply(DisplaySettings s) {
+            if (!isInitialized) {
+                isInitialized = MagInitialize();
+                if (!isInitialized) return;
+            }
+
+            double tr, tg, tb;
+            GammaMath.CalculateColorTemp(s.Temperature, out tr, out tg, out tb);
+
+            float c = (float)s.Contrast;
+            float b = (float)s.Brightness;
+
+            // Accurate gamma midtone offset: lifts midtones when gamma > 1.0, crushes when gamma < 1.0
+            float gammaOffset = (float)(Math.Pow(0.5, 1.0 / Math.Max(0.1, s.Gamma)) - 0.5);
+            float cOffset = 0.5f * (1.0f - c) + gammaOffset;
+
+            float rGain = (float)(s.Red * tr * b);
+            float gGain = (float)(s.Green * tg * b);
+            float bGain = (float)(s.Blue * tb * b);
+
+            MAGCOLOREFFECT eff = new MAGCOLOREFFECT();
+            eff.transform = new float[25] {
+                c * rGain,   0.0f,        0.0f,        0.0f, 0.0f,
+                0.0f,        c * gGain,   0.0f,        0.0f, 0.0f,
+                0.0f,        0.0f,        c * bGain,   0.0f, 0.0f,
+                0.0f,        0.0f,        0.0f,        1.0f, 0.0f,
+                cOffset * rGain, cOffset * gGain, cOffset * bGain, 0.0f, 1.0f
+            };
+
+            MagSetFullscreenColorEffect(ref eff);
+        }
+
+        public static void Reset() {
+            if (isInitialized) {
+                MAGCOLOREFFECT id = new MAGCOLOREFFECT();
+                id.transform = new float[25] {
+                    1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                    0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+                    0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                    0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                    0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+                };
+                MagSetFullscreenColorEffect(ref id);
+                MagUninitialize();
+                isInitialized = false;
+            }
+        }
+    }
+
     public class ScreenDevice {
         public int Number { get; set; }
         public string DeviceName { get; set; }
         public string FriendlyName { get; set; }
         public bool IsPrimary { get; set; }
         public SD.Rectangle Bounds { get; set; }
+        public int RefreshRate { get; set; }
         public byte[] OriginalRamp { get; set; }
+
+        public ScreenDevice() {
+            RefreshRate = 60;
+        }
 
         public string DisplayLabel {
             get {
-                return string.Format("{0} {1} ({2})", I18n.T("Monitor"), Number, DeviceName);
+                return string.Format("{0} {1}", I18n.T("Monitor"), Number);
             }
         }
 
         public string ResolutionText {
             get {
-                return string.Format("{0} × {1}", Bounds.Width, Bounds.Height);
+                return string.Format("{0} × {1} · {2} Hz", Bounds.Width, Bounds.Height, RefreshRate);
             }
         }
     }
@@ -78,8 +150,10 @@ namespace LucentControl {
         public double Red { get; set; }
         public double Green { get; set; }
         public double Blue { get; set; }
+        public string ProfileName { get; set; }
 
         public DisplaySettings() {
+            ProfileName = "Standard";
             ResetToDefaults();
         }
 
@@ -102,6 +176,7 @@ namespace LucentControl {
             s.Red = this.Red;
             s.Green = this.Green;
             s.Blue = this.Blue;
+            s.ProfileName = this.ProfileName;
             return s;
         }
     }
@@ -119,6 +194,7 @@ namespace LucentControl {
         public double Red = 1.0;
         public double Green = 1.0;
         public double Blue = 1.0;
+        public string ActiveProfile = "Standard";
 
         private static string GetConfigPath() {
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LucentControl");
@@ -149,6 +225,7 @@ namespace LucentControl {
                         else if (key == "StartMinimized" && bool.TryParse(val, out b)) cfg.StartMinimized = b;
                         else if (key == "MinimizeOnClose" && bool.TryParse(val, out b)) cfg.MinimizeOnClose = b;
                         else if (key == "SyncMonitors" && bool.TryParse(val, out b)) cfg.SyncMonitors = b;
+                        else if (key == "ActiveProfile") cfg.ActiveProfile = val;
                         else if (key == "Brightness" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Brightness = d;
                         else if (key == "Contrast" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Contrast = d;
                         else if (key == "Gamma" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Gamma = d;
@@ -171,6 +248,7 @@ namespace LucentControl {
                 lines.Add("StartMinimized=" + StartMinimized);
                 lines.Add("MinimizeOnClose=" + MinimizeOnClose);
                 lines.Add("SyncMonitors=" + SyncMonitors);
+                lines.Add("ActiveProfile=" + ActiveProfile);
                 lines.Add("Brightness=" + Brightness.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 lines.Add("Contrast=" + Contrast.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 lines.Add("Gamma=" + Gamma.ToString(System.Globalization.CultureInfo.InvariantCulture));
