@@ -392,6 +392,7 @@ namespace LucentControl {
             if (sliderBrightness != null) {
                 sliderBrightness.Value = s.Brightness;
                 badgeBrightness.Text = string.Format("{0}%", (int)Math.Round(s.Brightness * 100));
+                HighlightBrightnessTick();
             }
             if (sliderContrast != null) {
                 sliderContrast.Value = s.Contrast;
@@ -420,6 +421,25 @@ namespace LucentControl {
             }
 
             isUpdatingUi = false;
+        }
+
+        private void HighlightBrightnessTick() {
+            if (sliderBrightness == null || brightTick0 == null || brightTick100Badge == null || brightTick200 == null) return;
+            double v = sliderBrightness.Value;
+            bool isMid = Math.Abs(v - 1.0) < 0.05;
+            bool isMin = v <= 0.05;
+            bool isMax = v >= 1.95;
+
+            brightTick0.Foreground = isMin ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            brightTick200.Foreground = isMax ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
+
+            if (isMid) {
+                brightTick100Badge.Background = new SolidColorBrush(Color.FromArgb(90, 30, 58, 138));
+                brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            } else {
+                brightTick100Badge.Background = Brushes.Transparent;
+                brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            }
         }
 
         private void HighlightGammaTick() {

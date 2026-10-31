@@ -195,6 +195,7 @@ namespace LucentControl {
             Grid g = new Grid();
             g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
 
             Grid topRow = new Grid();
             topRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
@@ -246,13 +247,14 @@ namespace LucentControl {
             sliderRow.Children.Add(iconDim);
 
             sliderBrightness = new Slider();
-            sliderBrightness.Minimum = 0.20;
-            sliderBrightness.Maximum = 1.00;
+            sliderBrightness.Minimum = 0.00;
+            sliderBrightness.Maximum = 2.00;
             sliderBrightness.Value = 1.00;
             sliderBrightness.Style = sliderStyleBlue;
             sliderBrightness.ValueChanged += delegate {
                 if (!isUpdatingUi) {
                     badgeBrightness.Text = string.Format("{0}%", (int)Math.Round(sliderBrightness.Value * 100));
+                    HighlightBrightnessTick();
                     OnControlChanged();
                 }
             };
@@ -270,6 +272,45 @@ namespace LucentControl {
 
             Grid.SetRow(sliderRow, 1);
             g.Children.Add(sliderRow);
+
+            // Reference labels row: 0% ... [100%] ... 200%
+            Grid labelsRow = new Grid();
+            labelsRow.Margin = new Thickness(19, 6, 22, 0);
+            labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+            labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+
+            brightTick0 = new TextBlock();
+            brightTick0.Text = "0%";
+            brightTick0.FontSize = 10;
+            brightTick0.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            brightTick0.HorizontalAlignment = HorizontalAlignment.Left;
+            labelsRow.Children.Add(brightTick0);
+
+            brightTick100Badge = new Border();
+            brightTick100Badge.Background = new SolidColorBrush(Color.FromArgb(90, 30, 58, 138));
+            brightTick100Badge.CornerRadius = new CornerRadius(10);
+            brightTick100Badge.Padding = new Thickness(8, 2, 8, 2);
+            brightTick100Badge.HorizontalAlignment = HorizontalAlignment.Center;
+            brightTick100Text = new TextBlock();
+            brightTick100Text.Text = "100%";
+            brightTick100Text.FontSize = 10;
+            brightTick100Text.FontWeight = FontWeights.Bold;
+            brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            brightTick100Badge.Child = brightTick100Text;
+            Grid.SetColumn(brightTick100Badge, 1);
+            labelsRow.Children.Add(brightTick100Badge);
+
+            brightTick200 = new TextBlock();
+            brightTick200.Text = "200%";
+            brightTick200.FontSize = 10;
+            brightTick200.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            brightTick200.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(brightTick200, 2);
+            labelsRow.Children.Add(brightTick200);
+
+            Grid.SetRow(labelsRow, 2);
+            g.Children.Add(labelsRow);
             return g;
         }
 

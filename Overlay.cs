@@ -86,7 +86,7 @@ namespace LucentControl {
                 dimRect.Opacity = Math.Min(0.92, (1.0 - s.Brightness) * 0.95);
             } else if (s.Brightness > 1.0) {
                 dimRect.Fill = White;
-                dimRect.Opacity = Math.Min(0.35, (s.Brightness - 1.0) * 0.40);
+                dimRect.Opacity = Math.Min(0.45, (s.Brightness - 1.0) * 0.40);
             } else {
                 dimRect.Opacity = 0.0;
             }

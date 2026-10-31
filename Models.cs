@@ -585,7 +585,7 @@ namespace LucentControl {
                     if (!ok) continue;
 
                     DisplaySettings s = new DisplaySettings();
-                    s.Brightness = Clamp(v[0], 0.10, 1.50);
+                    s.Brightness = Clamp(v[0], 0.00, 2.00);
                     s.Contrast = Clamp(v[1], 0.20, 2.00);
                     s.Gamma = Clamp(v[2], 0.50, 2.50);
                     s.Temperature = Clamp(v[3], 2500, 9500);

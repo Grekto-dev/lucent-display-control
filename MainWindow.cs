@@ -79,6 +79,10 @@ namespace LucentControl {
         private TextBlock badgeRed;
         private TextBlock badgeGreen;
         private TextBlock badgeBlue;
+        private TextBlock brightTick0;
+        private Border brightTick100Badge;
+        private TextBlock brightTick100Text;
+        private TextBlock brightTick200;
         private TextBlock gammaTick18;
         private TextBlock gammaTick20;
         private Border gammaTick22Badge;

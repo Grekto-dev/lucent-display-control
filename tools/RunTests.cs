@@ -145,6 +145,25 @@ namespace LucentControl.Tests {
                 if (!ScreenOverlay.NeedsOverlay(dimmed)) throw new Exception("Display com brilho 0.8 precisa de overlay");
             });
 
+            // 8. Brightness 0-200% Range and Boost
+            Run("Brightness: Escala 0 a 200% com centro em 100% (1.0) e ganho de matriz", delegate {
+                DisplaySettings boost = new DisplaySettings();
+                boost.Brightness = 2.0; // 200%
+                float[] m = new float[25];
+                DwmEngine.BuildMatrix(boost, true, m);
+                if (Math.Abs(m[0] - 2.0f) > 0.01f) throw new Exception("Diagonal do ganho de brilho 200% incorreta: " + m[0]);
+
+                if (!ScreenOverlay.NeedsOverlay(boost)) throw new Exception("Brilho 200% deve ativar Overlay para per-monitor");
+
+                // Teste clamp no ProfileManager (suporta ate 2.00 sem truncar)
+                DisplaySettings pSet = new DisplaySettings();
+                pSet.Brightness = 1.85;
+                ProfileManager pm = new ProfileManager();
+                pm.SaveProfile("BoostTest", pSet);
+                UserProfile p = pm.Find("BoostTest");
+                if (p == null || Math.Abs(p.Brightness - 1.85) > 0.01) throw new Exception("ProfileManager nao preservou brilho 185%");
+            });
+
             // Limpa diretorio temporario de testes
             AppPaths.DataDirOverride = null;
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
