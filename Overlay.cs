@@ -11,78 +11,92 @@ using System.Windows.Threading;
 using SWF = System.Windows.Forms;
 
 namespace LucentControl {
+    /// <summary>Click-through, per-monitor dimming / tint layer (only used when monitors are controlled independently).</summary>
     public class ScreenOverlay : Window {
         [DllImport("user32.dll")]
-        public static extern int GetWindowLong(IntPtr hwnd, int index);
+        private static extern int GetWindowLong(IntPtr hwnd, int index);
 
         [DllImport("user32.dll")]
-        public static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+        private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
-        public const int GWL_EXSTYLE = -20;
-        public const int WS_EX_TRANSPARENT = 0x00000020;
-        public const int WS_EX_TOOLWINDOW = 0x00000080;
-        public const int WS_EX_NOACTIVATE = 0x08000000;
-        public const int WS_EX_LAYERED = 0x00080000;
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_TRANSPARENT = 0x00000020;
+        private const int WS_EX_TOOLWINDOW = 0x00000080;
+        private const int WS_EX_NOACTIVATE = 0x08000000;
+        private const int WS_EX_LAYERED = 0x00080000;
 
-        private Rectangle dimRect;
-        private Rectangle tintRect;
+        private static readonly Brush Black = Freeze(new SolidColorBrush(Colors.Black));
+        private static readonly Brush White = Freeze(new SolidColorBrush(Colors.White));
+        private static readonly Brush Warm = Freeze(new SolidColorBrush(Color.FromRgb(255, 135, 15)));
+        private static readonly Brush Cool = Freeze(new SolidColorBrush(Color.FromRgb(60, 150, 255)));
 
-        public ScreenOverlay(int left, int top, int width, int height) {
+        private readonly Rectangle dimRect;
+        private readonly Rectangle tintRect;
+        private readonly System.Drawing.Rectangle pixelBounds;
+
+        private static Brush Freeze(SolidColorBrush b) {
+            b.Freeze();
+            return b;
+        }
+
+        /// <summary>True when the settings need a visible overlay at all.</summary>
+        public static bool NeedsOverlay(DisplaySettings s) {
+            return Math.Abs(s.Brightness - 1.0) > 0.005 || s.Temperature < 6400.0 || s.Temperature > 6600.0;
+        }
+
+        public ScreenOverlay(System.Drawing.Rectangle bounds) {
+            pixelBounds = bounds;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Topmost = true;
             ShowInTaskbar = false;
+            ShowActivated = false;
             Focusable = false;
-            Left = left;
-            Top = top;
-            Width = width;
-            Height = height;
+            IsHitTestVisible = false;
             Background = Brushes.Transparent;
+            Left = bounds.X;
+            Top = bounds.Y;
+            Width = bounds.Width;
+            Height = bounds.Height;
 
             Grid grid = new Grid();
-
             dimRect = new Rectangle();
-            dimRect.Fill = Brushes.Black;
+            dimRect.Fill = Black;
             dimRect.Opacity = 0.0;
             grid.Children.Add(dimRect);
 
             tintRect = new Rectangle();
-            tintRect.Fill = new SolidColorBrush(Color.FromRgb(255, 140, 0));
+            tintRect.Fill = Warm;
             tintRect.Opacity = 0.0;
             grid.Children.Add(tintRect);
-
             Content = grid;
 
             SourceInitialized += delegate {
-                try {
-                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
-                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED);
-                } catch { }
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED);
+                // Position in physical pixels: WPF's Left/Width are DIPs and drift on scaled displays.
+                NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, pixelBounds.X, pixelBounds.Y, pixelBounds.Width, pixelBounds.Height, NativeMethods.SWP_NOACTIVATE);
             };
         }
 
         public void ApplySettings(DisplaySettings s) {
-            // Brightness overlay (black for dimming, white for boost)
             if (s.Brightness < 1.0) {
-                dimRect.Fill = Brushes.Black;
-                dimRect.Opacity = Math.Min(0.92, Math.Max(0.0, (1.0 - s.Brightness) * 0.95));
+                dimRect.Fill = Black;
+                dimRect.Opacity = Math.Min(0.92, (1.0 - s.Brightness) * 0.95);
             } else if (s.Brightness > 1.0) {
-                dimRect.Fill = Brushes.White;
+                dimRect.Fill = White;
                 dimRect.Opacity = Math.Min(0.35, (s.Brightness - 1.0) * 0.40);
             } else {
                 dimRect.Opacity = 0.0;
             }
 
-            // Color Temperature tint
             if (s.Temperature < 6400.0) {
-                double factor = (6500.0 - s.Temperature) / (6500.0 - 2500.0);
-                tintRect.Fill = new SolidColorBrush(Color.FromRgb(255, 135, 15));
-                tintRect.Opacity = Math.Min(0.55, factor * 0.45);
+                tintRect.Fill = Warm;
+                tintRect.Opacity = Math.Min(0.55, (6500.0 - s.Temperature) / 4000.0 * 0.45);
             } else if (s.Temperature > 6600.0) {
-                double factor = (s.Temperature - 6500.0) / (9500.0 - 6500.0);
-                tintRect.Fill = new SolidColorBrush(Color.FromRgb(60, 150, 255));
-                tintRect.Opacity = Math.Min(0.35, factor * 0.25);
+                tintRect.Fill = Cool;
+                tintRect.Opacity = Math.Min(0.35, (s.Temperature - 6500.0) / 3000.0 * 0.25);
             } else {
                 tintRect.Opacity = 0.0;
             }
@@ -90,18 +104,20 @@ namespace LucentControl {
     }
 
     public class IdentifyOverlay : Window {
+        private readonly System.Drawing.Rectangle bounds;
+
         public IdentifyOverlay(int monNumber, string resolution, SWF.Screen screen) {
+            bounds = screen.Bounds;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
             Topmost = true;
             ShowInTaskbar = false;
+            ShowActivated = false;
             Focusable = false;
+            IsHitTestVisible = false;
             Background = Brushes.Transparent;
-
             Width = 240;
             Height = 240;
-            Left = screen.Bounds.X + (screen.Bounds.Width - Width) / 2;
-            Top = screen.Bounds.Y + (screen.Bounds.Height - Height) / 2;
 
             Border card = new Border();
             card.CornerRadius = new CornerRadius(20);
@@ -133,6 +149,14 @@ namespace LucentControl {
             card.Child = sp;
             Content = card;
 
+            SourceInitialized += delegate {
+                PresentationSource src = PresentationSource.FromVisual(this);
+                double scale = src != null && src.CompositionTarget != null ? src.CompositionTarget.TransformToDevice.M11 : 1.0;
+                int px = (int)Math.Round(240 * scale);
+                NativeMethods.SetWindowPos(new WindowInteropHelper(this).Handle, NativeMethods.HWND_TOPMOST,
+                    bounds.X + (bounds.Width - px) / 2, bounds.Y + (bounds.Height - px) / 2, px, px, NativeMethods.SWP_NOACTIVATE);
+            };
+
             DispatcherTimer timer = new DispatcherTimer();
             timer.Interval = TimeSpan.FromSeconds(2.5);
             timer.Tick += delegate {
@@ -151,14 +175,19 @@ namespace LucentControl {
     }
 
     public class CalibrationWindow : Window {
+        private readonly System.Drawing.Rectangle bounds;
+
         public CalibrationWindow(CalibrationPatternType pattern, SWF.Screen screen) {
+            bounds = screen != null ? screen.Bounds : SWF.Screen.PrimaryScreen.Bounds;
             WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
             Topmost = true;
             ShowInTaskbar = false;
-            Left = screen != null ? screen.Bounds.X : 0;
-            Top = screen != null ? screen.Bounds.Y : 0;
-            Width = screen != null ? screen.Bounds.Width : SystemParameters.PrimaryScreenWidth;
-            Height = screen != null ? screen.Bounds.Height : SystemParameters.PrimaryScreenHeight;
+            Icon = AppIcon.Wpf();
+            Left = bounds.X;
+            Top = bounds.Y;
+            Width = bounds.Width;
+            Height = bounds.Height;
             Cursor = System.Windows.Input.Cursors.Hand;
 
             Grid root = new Grid();
@@ -174,7 +203,6 @@ namespace LucentControl {
                 grayGrid.RowDefinitions.Add(new RowDefinition() { Height = new GridLength(1, GridUnitType.Star) });
                 grayGrid.RowDefinitions.Add(new RowDefinition() { Height = new GridLength(80) });
 
-                // 16 discrete steps
                 UniformGrid stepsGrid = new UniformGrid();
                 stepsGrid.Rows = 1;
                 stepsGrid.Columns = 16;
@@ -192,13 +220,11 @@ namespace LucentControl {
                     tb.VerticalAlignment = VerticalAlignment.Bottom;
                     tb.Margin = new Thickness(0, 0, 0, 20);
                     b.Child = tb;
-
                     stepsGrid.Children.Add(b);
                 }
                 Grid.SetRow(stepsGrid, 0);
                 grayGrid.Children.Add(stepsGrid);
 
-                // Continuous gradient
                 Border contGrad = new Border();
                 LinearGradientBrush lgb = new LinearGradientBrush();
                 lgb.StartPoint = new Point(0, 0.5);
@@ -210,20 +236,13 @@ namespace LucentControl {
                 grayGrid.Children.Add(contGrad);
 
                 root.Children.Add(grayGrid);
-            } else if (pattern == CalibrationPatternType.ColorBars) {
-                // SMPTE 8 color bars
+            } else {
                 UniformGrid barGrid = new UniformGrid();
                 barGrid.Rows = 1;
                 barGrid.Columns = 8;
                 Color[] colors = new Color[] {
-                    Color.FromRgb(255, 255, 255), // White 100%
-                    Color.FromRgb(255, 255, 0),   // Yellow
-                    Color.FromRgb(0, 255, 255),   // Cyan
-                    Color.FromRgb(0, 255, 0),     // Green
-                    Color.FromRgb(255, 0, 255),   // Magenta
-                    Color.FromRgb(255, 0, 0),     // Red
-                    Color.FromRgb(0, 0, 255),     // Blue
-                    Color.FromRgb(0, 0, 0)        // Black
+                    Color.FromRgb(255, 255, 255), Color.FromRgb(255, 255, 0), Color.FromRgb(0, 255, 255), Color.FromRgb(0, 255, 0),
+                    Color.FromRgb(255, 0, 255), Color.FromRgb(255, 0, 0), Color.FromRgb(0, 0, 255), Color.FromRgb(0, 0, 0)
                 };
                 string[] names = new string[] { "White", "Yellow", "Cyan", "Green", "Magenta", "Red", "Blue", "Black" };
                 for (int i = 0; i < 8; i++) {
@@ -231,7 +250,7 @@ namespace LucentControl {
                     b.Background = new SolidColorBrush(colors[i]);
                     TextBlock tb = new TextBlock();
                     tb.Text = names[i];
-                    tb.Foreground = (i == 0 || i == 1 || i == 2 || i == 3) ? Brushes.Black : Brushes.White;
+                    tb.Foreground = i < 4 ? Brushes.Black : Brushes.White;
                     tb.FontSize = 16;
                     tb.FontWeight = FontWeights.Bold;
                     tb.HorizontalAlignment = HorizontalAlignment.Center;
@@ -243,7 +262,6 @@ namespace LucentControl {
                 root.Children.Add(barGrid);
             }
 
-            // Floating dismiss instruction banner at top
             Border banner = new Border();
             banner.HorizontalAlignment = HorizontalAlignment.Center;
             banner.VerticalAlignment = VerticalAlignment.Top;
@@ -264,68 +282,76 @@ namespace LucentControl {
 
             Content = root;
 
+            SourceInitialized += delegate {
+                NativeMethods.SetWindowPos(new WindowInteropHelper(this).Handle, NativeMethods.HWND_TOPMOST,
+                    bounds.X, bounds.Y, bounds.Width, bounds.Height, 0);
+            };
+            Loaded += delegate { Activate(); Focus(); };
             KeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e) {
-                if (e.Key == System.Windows.Input.Key.Escape) {
-                    Close();
-                }
+                if (e.Key == System.Windows.Input.Key.Escape) Close();
             };
-            MouseDown += delegate {
-                Close();
-            };
+            MouseDown += delegate { Close(); };
         }
     }
 
+    /// <summary>
+    /// Owns the per-monitor overlays. Windows are created only while a monitor actually needs one
+    /// and are destroyed as soon as it returns to neutral, so the idle cost is zero.
+    /// </summary>
     public class OverlayManager {
-        private Dictionary<string, ScreenOverlay> overlays;
+        private readonly Dictionary<string, ScreenOverlay> overlays = new Dictionary<string, ScreenOverlay>();
 
-        public OverlayManager() {
-            overlays = new Dictionary<string, ScreenOverlay>();
-            InitOverlays();
-        }
+        public int ActiveCount { get { return overlays.Count; } }
 
-        public void InitOverlays() {
-            CloseAll();
-            try {
-                foreach (SWF.Screen s in SWF.Screen.AllScreens) {
-                    ScreenOverlay ov = new ScreenOverlay(s.Bounds.X, s.Bounds.Y, s.Bounds.Width, s.Bounds.Height);
-                    ov.Show();
-                    overlays[s.DeviceName] = ov;
-                }
-            } catch { }
-        }
-
-        public void UpdateDisplay(string deviceName, DisplaySettings s) {
+        public void Update(SWF.Screen screen, DisplaySettings s) {
             ScreenOverlay ov;
-            if (overlays.TryGetValue(deviceName, out ov)) {
-                ov.ApplySettings(s);
+            bool has = overlays.TryGetValue(screen.DeviceName, out ov);
+            if (!ScreenOverlay.NeedsOverlay(s)) {
+                if (has) {
+                    ov.Close();
+                    overlays.Remove(screen.DeviceName);
+                }
+                return;
+            }
+            if (!has) {
+                ov = new ScreenOverlay(screen.Bounds);
+                overlays[screen.DeviceName] = ov;
+                ov.Show();
+            }
+            ov.ApplySettings(s);
+        }
+
+        public void ShowPattern(CalibrationPatternType pattern) {
+            foreach (SWF.Screen scr in SWF.Screen.AllScreens) {
+                new CalibrationWindow(pattern, scr).Show();
             }
         }
 
-        public void UpdateAll(DisplaySettings s) {
-            foreach (var kvp in overlays) {
-                kvp.Value.ApplySettings(s);
+        public void Apply(List<ScreenDevice> devices, Dictionary<string, DisplaySettings> settings) {
+            SWF.Screen[] screens = SWF.Screen.AllScreens;
+            foreach (SWF.Screen scr in screens) {
+                DisplaySettings s;
+                if (settings.TryGetValue(scr.DeviceName, out s)) {
+                    Update(scr, s);
+                }
             }
         }
 
         public void ShowIdentifyBadges(List<ScreenDevice> devices) {
-            try {
-                foreach (ScreenDevice dev in devices) {
-                    foreach (SWF.Screen scr in SWF.Screen.AllScreens) {
-                        if (scr.DeviceName == dev.DeviceName) {
-                            IdentifyOverlay idOv = new IdentifyOverlay(dev.Number, dev.ResolutionText, scr);
-                            idOv.Show();
-                            break;
-                        }
+            SWF.Screen[] screens = SWF.Screen.AllScreens;
+            foreach (ScreenDevice dev in devices) {
+                foreach (SWF.Screen scr in screens) {
+                    if (scr.DeviceName == dev.DeviceName) {
+                        new IdentifyOverlay(dev.Number, dev.ResolutionText, scr).Show();
+                        break;
                     }
                 }
-            } catch { }
+            }
         }
 
         public void CloseAll() {
-            foreach (var kvp in overlays) {
-                try {
-                    kvp.Value.Close();
-                } catch { }
+            foreach (KeyValuePair<string, ScreenOverlay> kvp in overlays) {
+                try { kvp.Value.Close(); } catch { }
             }
             overlays.Clear();
         }
