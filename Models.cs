@@ -196,6 +196,19 @@ namespace LucentControl {
         public double Blue = 1.0;
         public string ActiveProfile = "Standard";
 
+        // Scheduler Settings
+        public bool SchedulerEnabled = false;
+        public bool SchedulerNotify = true;
+        public int SlotDayHour = 8;
+        public int SlotDayMinute = 0;
+        public string SlotDayProfile = "Office / Work";
+        public int SlotSunsetHour = 18;
+        public int SlotSunsetMinute = 30;
+        public string SlotSunsetProfile = "Warm / Reading";
+        public int SlotNightHour = 22;
+        public int SlotNightMinute = 0;
+        public string SlotNightProfile = "Night Shift";
+
         private static string GetConfigPath() {
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LucentControl");
             if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
@@ -233,6 +246,18 @@ namespace LucentControl {
                         else if (key == "Red" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Red = d;
                         else if (key == "Green" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Green = d;
                         else if (key == "Blue" && double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out d)) cfg.Blue = d;
+                        // Scheduler
+                        else if (key == "SchedulerEnabled" && bool.TryParse(val, out b)) cfg.SchedulerEnabled = b;
+                        else if (key == "SchedulerNotify" && bool.TryParse(val, out b)) cfg.SchedulerNotify = b;
+                        else if (key == "SlotDayHour" && int.TryParse(val, out i)) cfg.SlotDayHour = i;
+                        else if (key == "SlotDayMinute" && int.TryParse(val, out i)) cfg.SlotDayMinute = i;
+                        else if (key == "SlotDayProfile") cfg.SlotDayProfile = val;
+                        else if (key == "SlotSunsetHour" && int.TryParse(val, out i)) cfg.SlotSunsetHour = i;
+                        else if (key == "SlotSunsetMinute" && int.TryParse(val, out i)) cfg.SlotSunsetMinute = i;
+                        else if (key == "SlotSunsetProfile") cfg.SlotSunsetProfile = val;
+                        else if (key == "SlotNightHour" && int.TryParse(val, out i)) cfg.SlotNightHour = i;
+                        else if (key == "SlotNightMinute" && int.TryParse(val, out i)) cfg.SlotNightMinute = i;
+                        else if (key == "SlotNightProfile") cfg.SlotNightProfile = val;
                     }
                 }
             } catch { }
@@ -256,6 +281,18 @@ namespace LucentControl {
                 lines.Add("Red=" + Red.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 lines.Add("Green=" + Green.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 lines.Add("Blue=" + Blue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                // Scheduler
+                lines.Add("SchedulerEnabled=" + SchedulerEnabled);
+                lines.Add("SchedulerNotify=" + SchedulerNotify);
+                lines.Add("SlotDayHour=" + SlotDayHour);
+                lines.Add("SlotDayMinute=" + SlotDayMinute);
+                lines.Add("SlotDayProfile=" + SlotDayProfile);
+                lines.Add("SlotSunsetHour=" + SlotSunsetHour);
+                lines.Add("SlotSunsetMinute=" + SlotSunsetMinute);
+                lines.Add("SlotSunsetProfile=" + SlotSunsetProfile);
+                lines.Add("SlotNightHour=" + SlotNightHour);
+                lines.Add("SlotNightMinute=" + SlotNightMinute);
+                lines.Add("SlotNightProfile=" + SlotNightProfile);
                 File.WriteAllLines(path, lines.ToArray());
             } catch { }
         }
@@ -274,6 +311,150 @@ namespace LucentControl {
                     rk.DeleteValue("LucentDisplayControl", false);
                 }
             } catch { }
+        }
+    }
+
+    public class UserProfile {
+        public string Name { get; set; }
+        public double Brightness { get; set; }
+        public double Contrast { get; set; }
+        public double Gamma { get; set; }
+        public double Temperature { get; set; }
+        public double Red { get; set; }
+        public double Green { get; set; }
+        public double Blue { get; set; }
+        public bool IsBuiltIn { get; set; }
+
+        public UserProfile() {
+            Brightness = 1.0;
+            Contrast = 1.0;
+            Gamma = 1.0;
+            Temperature = 6500.0;
+            Red = 1.0;
+            Green = 1.0;
+            Blue = 1.0;
+            IsBuiltIn = false;
+        }
+
+        public UserProfile(string name, double b, double c, double g, double t, double red, double green, double blue, bool isBuiltIn) {
+            Name = name;
+            Brightness = b;
+            Contrast = c;
+            Gamma = g;
+            Temperature = t;
+            Red = red;
+            Green = green;
+            Blue = blue;
+            IsBuiltIn = isBuiltIn;
+        }
+
+        public DisplaySettings ToSettings() {
+            DisplaySettings s = new DisplaySettings();
+            s.Brightness = Brightness;
+            s.Contrast = Contrast;
+            s.Gamma = Gamma;
+            s.Temperature = Temperature;
+            s.Red = Red;
+            s.Green = Green;
+            s.Blue = Blue;
+            s.ProfileName = Name;
+            return s;
+        }
+    }
+
+    public class ProfileManager {
+        public List<UserProfile> Profiles { get; private set; }
+
+        public ProfileManager() {
+            Profiles = new List<UserProfile>();
+            LoadAll();
+        }
+
+        public void LoadAll() {
+            Profiles.Clear();
+            // 1. Built-in standard profiles
+            Profiles.Add(new UserProfile("Standard", 1.0, 1.0, 1.0, 6500.0, 1.0, 1.0, 1.0, true));
+            Profiles.Add(new UserProfile("Warm", 0.85, 0.95, 1.05, 4500.0, 1.0, 0.95, 0.85, true));
+            Profiles.Add(new UserProfile("Cool", 1.0, 1.10, 1.0, 8000.0, 0.92, 0.96, 1.0, true));
+            Profiles.Add(new UserProfile("Movie", 0.90, 1.15, 1.15, 5800.0, 1.0, 0.95, 0.90, true));
+            Profiles.Add(new UserProfile("Work", 0.80, 1.0, 1.0, 6000.0, 1.0, 1.0, 0.96, true));
+            Profiles.Add(new UserProfile("Night", 0.65, 0.90, 1.0, 3400.0, 1.0, 0.84, 0.68, true));
+            Profiles.Add(new UserProfile("Gaming", 1.0, 1.20, 1.25, 7000.0, 1.0, 1.0, 1.0, true));
+            Profiles.Add(new UserProfile("Focus", 0.95, 1.30, 1.0, 6500.0, 1.0, 1.0, 1.0, true));
+
+            // 2. Load custom user profiles from profiles.ini
+            try {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LucentControl");
+                string path = Path.Combine(dir, "profiles.ini");
+                if (File.Exists(path)) {
+                    string[] lines = File.ReadAllLines(path);
+                    foreach (string line in lines) {
+                        if (string.IsNullOrEmpty(line) || line.StartsWith("#")) continue;
+                        string[] p = line.Split('|');
+                        if (p.Length >= 8) {
+                            UserProfile up = new UserProfile();
+                            up.Name = p[0];
+                            up.Brightness = double.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Contrast = double.Parse(p[2], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Gamma = double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Temperature = double.Parse(p[4], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Red = double.Parse(p[5], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Green = double.Parse(p[6], System.Globalization.CultureInfo.InvariantCulture);
+                            up.Blue = double.Parse(p[7], System.Globalization.CultureInfo.InvariantCulture);
+                            up.IsBuiltIn = false;
+                            Profiles.Add(up);
+                        }
+                    }
+                }
+            } catch { }
+        }
+
+        public void SaveCustom() {
+            try {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LucentControl");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                string path = Path.Combine(dir, "profiles.ini");
+                List<string> lines = new List<string>();
+                foreach (UserProfile p in Profiles) {
+                    if (!p.IsBuiltIn) {
+                        lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                            "{0}|{1:F2}|{2:F2}|{3:F2}|{4:F0}|{5:F2}|{6:F2}|{7:F2}",
+                            p.Name, p.Brightness, p.Contrast, p.Gamma, p.Temperature, p.Red, p.Green, p.Blue));
+                    }
+                }
+                File.WriteAllLines(path, lines.ToArray());
+            } catch { }
+        }
+
+        public void AddOrUpdate(string name, DisplaySettings s) {
+            UserProfile existing = Profiles.Find(delegate(UserProfile p) { return p.Name.Equals(name, StringComparison.OrdinalIgnoreCase); });
+            if (existing != null) {
+                existing.Brightness = s.Brightness;
+                existing.Contrast = s.Contrast;
+                existing.Gamma = s.Gamma;
+                existing.Temperature = s.Temperature;
+                existing.Red = s.Red;
+                existing.Green = s.Green;
+                existing.Blue = s.Blue;
+            } else {
+                UserProfile up = new UserProfile(name, s.Brightness, s.Contrast, s.Gamma, s.Temperature, s.Red, s.Green, s.Blue, false);
+                Profiles.Add(up);
+            }
+            SaveCustom();
+        }
+
+        public bool DeleteProfile(string name) {
+            UserProfile existing = Profiles.Find(delegate(UserProfile p) { return p.Name.Equals(name, StringComparison.OrdinalIgnoreCase); });
+            if (existing != null && !existing.IsBuiltIn) {
+                Profiles.Remove(existing);
+                SaveCustom();
+                return true;
+            }
+            return false;
+        }
+
+        public UserProfile Find(string name) {
+            return Profiles.Find(delegate(UserProfile p) { return p.Name.Equals(name, StringComparison.OrdinalIgnoreCase); });
         }
     }
 
