@@ -1,0 +1,12 @@
+# Build artifacts
+*.exe
+*.dll
+*.pdb
+*.obj
+*.log
+
+# Temp / user files
+config.ini
+*.tmp
+.vs/
+.idea/
