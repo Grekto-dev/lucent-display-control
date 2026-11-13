@@ -98,6 +98,18 @@ namespace LucentControl {
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetCurrentProcess();
 
+        [DllImport("gdi32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr CreateDC(string lpszDriver, string lpszDevice, string lpszOutput, IntPtr lpInitData);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool DeleteDC(IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool SetDeviceGammaRamp(IntPtr hdc, [In] ushort[] lpRamp);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool GetDeviceGammaRamp(IntPtr hdc, [Out] ushort[] lpRamp);
+
         public const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
         public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
@@ -175,25 +187,54 @@ namespace LucentControl {
 
         /// <summary>Builds the 5x5 matrix for the given settings. Exposed for tests.</summary>
         public static void BuildMatrix(DisplaySettings s, bool includeBrightnessAndTemp, float[] m) {
-            double brightness = includeBrightnessAndTemp ? s.Brightness : 1.0;
-            double kelvin = includeBrightnessAndTemp ? s.Temperature : 6500.0;
+            BuildMatrix(s, includeBrightnessAndTemp, true, m);
+        }
 
-            double tr, tg, tb;
-            GammaMath.CalculateColorTemp(kelvin, out tr, out tg, out tb);
+        /// <summary>
+        /// Builds the 5x5 matrix separating tone/RGB gains (which hardware LUT can handle)
+        /// from cross-channel color vibrance/saturation (which only a 3x3/5x5 matrix can compute).
+        /// </summary>
+        public static void BuildMatrix(DisplaySettings s, bool includeToneAndGains, bool includeVibrance, float[] m) {
+            double brightness = includeToneAndGains ? s.Brightness : 1.0;
+            double kelvin = includeToneAndGains ? s.Temperature : 6500.0;
 
-            float c = (float)s.Contrast;
-            // Midtone lift: raises midtones when gamma > 1, crushes them when gamma < 1
-            float gammaOffset = (float)(Math.Pow(0.5, 1.0 / Math.Max(0.1, s.Gamma)) - 0.5);
-            float cOffset = 0.5f * (1.0f - c) + gammaOffset;
+            double tr = 1.0, tg = 1.0, tb = 1.0;
+            if (includeToneAndGains) {
+                GammaMath.CalculateColorTemp(kelvin, out tr, out tg, out tb);
+            }
 
-            float rGain = (float)(s.Red * tr * brightness);
-            float gGain = (float)(s.Green * tg * brightness);
-            float bGain = (float)(s.Blue * tb * brightness);
+            float c = includeToneAndGains ? (float)s.Contrast : 1.0f;
+            float gammaOffset = includeToneAndGains ? (float)(Math.Pow(0.5, 1.0 / Math.Max(0.1, s.Gamma)) - 0.5) : 0.0f;
+            float cOffset = includeToneAndGains ? (0.5f * (1.0f - c) + gammaOffset) : 0.0f;
+
+            float rGain = includeToneAndGains ? (float)(s.Red * tr * brightness) : 1.0f;
+            float gGain = includeToneAndGains ? (float)(s.Green * tg * brightness) : 1.0f;
+            float bGain = includeToneAndGains ? (float)(s.Blue * tb * brightness) : 1.0f;
+
+            float sat = includeVibrance ? (float)s.Vibrance : 1.0f;
+            float invSat = 1.0f - sat;
+            const float wr = 0.2126f;
+            const float wg = 0.7152f;
+            const float wb = 0.0722f;
+
+            float cr = c * rGain;
+            float cg = c * gGain;
+            float cb = c * bGain;
 
             Array.Clear(m, 0, 25);
-            m[0] = c * rGain;
-            m[6] = c * gGain;
-            m[12] = c * bGain;
+            // Row-vector multiplication: [r g b a 1] * M
+            m[0] = (invSat * wr + sat) * cr;
+            m[1] = (invSat * wr) * cg;
+            m[2] = (invSat * wr) * cb;
+
+            m[5] = (invSat * wg) * cr;
+            m[6] = (invSat * wg + sat) * cg;
+            m[7] = (invSat * wg) * cb;
+
+            m[10] = (invSat * wb) * cr;
+            m[11] = (invSat * wb) * cg;
+            m[12] = (invSat * wb + sat) * cb;
+
             m[18] = 1.0f;
             m[20] = cOffset * rGain;
             m[21] = cOffset * gGain;
@@ -209,11 +250,15 @@ namespace LucentControl {
             return true;
         }
 
-        /// <param name="full">true: brightness + temperature included. false: only the channels that are
-        /// shared by every monitor (contrast, gamma, RGB) - used when brightness/temperature are per-monitor.</param>
         public static void Apply(DisplaySettings s, bool full) {
+            Apply(s, full, true);
+        }
+
+        /// <param name="includeToneAndGains">Whether DWM should apply brightness, temp, contrast, gamma and RGB.</param>
+        /// <param name="includeVibrance">Whether DWM should apply color saturation / vibrance.</param>
+        public static void Apply(DisplaySettings s, bool includeToneAndGains, bool includeVibrance) {
             float[] m = effect.transform;
-            BuildMatrix(s, full, m);
+            BuildMatrix(s, includeToneAndGains, includeVibrance, m);
 
             if (hasLast && SameAsLast(m)) return;
             if (!isInitialized) {
@@ -255,6 +300,130 @@ namespace LucentControl {
                 isInitialized = false;
             }
             hasLast = false;
+        }
+    }
+
+    /// <summary>
+    /// Programs the GPU/display scanout LUT (SetDeviceGammaRamp) per monitor. Hardware LUT stays active
+    /// over Windows Start Menu, Taskbar and UAC secure desktop on native GPUs (and DisplayLink with EnableGammaRamp=true).
+    /// </summary>
+    public static class HardwareLutEngine {
+        private static readonly ushort[] scratchRamp = new ushort[768];
+        private static readonly Dictionary<string, ushort[]> appliedRamps = new Dictionary<string, ushort[]>(StringComparer.OrdinalIgnoreCase);
+
+        public static void BuildRamp(DisplaySettings s, ushort[] ramp) {
+            double tr, tg, tb;
+            GammaMath.CalculateColorTemp(s.Temperature, out tr, out tg, out tb);
+
+            double rScale = s.Red * tr * s.Brightness;
+            double gScale = s.Green * tg * s.Brightness;
+            double bScale = s.Blue * tb * s.Brightness;
+            double invGamma = 1.0 / Math.Max(0.1, s.Gamma);
+            double c = s.Contrast;
+
+            for (int i = 0; i < 256; i++) {
+                double x = i / 255.0;
+                double curved = Math.Pow(x, invGamma);
+                double contrasted = (curved - 0.5) * c + 0.5;
+                if (contrasted < 0.0) contrasted = 0.0;
+                if (contrasted > 1.0) contrasted = 1.0;
+
+                double rVal = contrasted * rScale;
+                double gVal = contrasted * gScale;
+                double bVal = contrasted * bScale;
+
+                ramp[i] = (ushort)(rVal <= 0.0 ? 0 : (rVal >= 1.0 ? 65535 : Math.Round(rVal * 65535.0)));
+                ramp[256 + i] = (ushort)(gVal <= 0.0 ? 0 : (gVal >= 1.0 ? 65535 : Math.Round(gVal * 65535.0)));
+                ramp[512 + i] = (ushort)(bVal <= 0.0 ? 0 : (bVal >= 1.0 ? 65535 : Math.Round(bVal * 65535.0)));
+            }
+        }
+
+        private static bool RampsEqual(ushort[] a, ushort[] b) {
+            for (int i = 0; i < 768; i++) {
+                if (a[i] != b[i]) return false;
+            }
+            return true;
+        }
+
+        private static bool ApplyRampForDevice(string deviceName, ushort[] ramp) {
+            ushort[] prev;
+            if (appliedRamps.TryGetValue(deviceName, out prev) && RampsEqual(prev, ramp)) {
+                return true;
+            }
+            IntPtr hdc = NativeMethods.CreateDC("DISPLAY", deviceName, null, IntPtr.Zero);
+            if (hdc == IntPtr.Zero) return false;
+            try {
+                if (!NativeMethods.SetDeviceGammaRamp(hdc, ramp)) return false;
+                if (prev == null) {
+                    prev = new ushort[768];
+                    appliedRamps[deviceName] = prev;
+                }
+                Array.Copy(ramp, prev, 768);
+                return true;
+            } finally {
+                NativeMethods.DeleteDC(hdc);
+            }
+        }
+
+        public static bool Apply(List<ScreenDevice> devices, Dictionary<string, DisplaySettings> settingsPerMonitor) {
+            if (devices == null || devices.Count == 0) return false;
+            bool allOk = true;
+            for (int i = 0; i < devices.Count; i++) {
+                ScreenDevice dev = devices[i];
+                DisplaySettings ds;
+                if (!settingsPerMonitor.TryGetValue(dev.DeviceName, out ds)) continue;
+                BuildRamp(ds, scratchRamp);
+                if (!ApplyRampForDevice(dev.DeviceName, scratchRamp)) {
+                    allOk = false;
+                }
+            }
+            return allOk;
+        }
+
+        public static void ResetAll(List<ScreenDevice> devices) {
+            if (appliedRamps.Count == 0) return;
+            for (int i = 0; i < 256; i++) {
+                ushort v = (ushort)Math.Round((i / 255.0) * 65535.0);
+                scratchRamp[i] = v;
+                scratchRamp[256 + i] = v;
+                scratchRamp[512 + i] = v;
+            }
+            if (devices != null) {
+                for (int i = 0; i < devices.Count; i++) {
+                    string devName = devices[i].DeviceName;
+                    if (!appliedRamps.ContainsKey(devName)) continue;
+                    IntPtr hdc = NativeMethods.CreateDC("DISPLAY", devName, null, IntPtr.Zero);
+                    if (hdc != IntPtr.Zero) {
+                        try { NativeMethods.SetDeviceGammaRamp(hdc, scratchRamp); } finally { NativeMethods.DeleteDC(hdc); }
+                    }
+                }
+            }
+            appliedRamps.Clear();
+        }
+
+        public static bool IsDisplayLinkConnected(List<ScreenDevice> devices) {
+            if (devices == null) return false;
+            for (int i = 0; i < devices.Count; i++) {
+                string name = devices[i].FriendlyName;
+                if (name != null && name.IndexOf("DisplayLink", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static bool IsDisplayLinkGammaEnabled() {
+            try {
+                using (RegistryKey rk = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\DisplayLink\Core")) {
+                    if (rk == null) return false;
+                    object val = rk.GetValue("EnableGammaRamp");
+                    if (val == null) return false;
+                    string s = val.ToString().Trim();
+                    return string.Equals(s, "true", StringComparison.OrdinalIgnoreCase) || s == "1";
+                }
+            } catch {
+                return false;
+            }
         }
     }
 
@@ -368,6 +537,7 @@ namespace LucentControl {
         public double Red { get; set; }
         public double Green { get; set; }
         public double Blue { get; set; }
+        public double Vibrance { get; set; }
 
         public DisplaySettings() {
             ResetToDefaults();
@@ -381,6 +551,7 @@ namespace LucentControl {
             Red = 1.0;
             Green = 1.0;
             Blue = 1.0;
+            Vibrance = 1.0;
         }
 
         public void CopyFrom(DisplaySettings o) {
@@ -391,6 +562,7 @@ namespace LucentControl {
             Red = o.Red;
             Green = o.Green;
             Blue = o.Blue;
+            Vibrance = o.Vibrance;
         }
 
         public DisplaySettings Clone() {
@@ -406,7 +578,8 @@ namespace LucentControl {
                 && Math.Abs(Temperature - o.Temperature) < 5.0
                 && Math.Abs(Red - o.Red) < 0.005
                 && Math.Abs(Green - o.Green) < 0.005
-                && Math.Abs(Blue - o.Blue) < 0.005;
+                && Math.Abs(Blue - o.Blue) < 0.005
+                && Math.Abs(Vibrance - o.Vibrance) < 0.005;
         }
 
         public bool IsDefault() {
@@ -420,10 +593,11 @@ namespace LucentControl {
         public bool StartMinimized = false;
         public bool MinimizeOnClose = true;
 
-        // Profile saving behaviour
+        // Profile saving & display engine behaviour
         public bool AutoSave = false;
         public bool AutoApplyProfile = false;
         public string StartupProfile = "Standard";
+        public bool UseHardwareLut = false;
 
         // Scheduler
         public bool SchedulerEnabled = false;
@@ -462,6 +636,7 @@ namespace LucentControl {
                         case "AutoSave": if (bool.TryParse(val, out b)) cfg.AutoSave = b; break;
                         case "AutoApplyProfile": if (bool.TryParse(val, out b)) cfg.AutoApplyProfile = b; break;
                         case "StartupProfile": if (val.Length > 0) cfg.StartupProfile = val; break;
+                        case "UseHardwareLut": if (bool.TryParse(val, out b)) cfg.UseHardwareLut = b; break;
                         case "SchedulerEnabled": if (bool.TryParse(val, out b)) cfg.SchedulerEnabled = b; break;
                         case "SchedulerNotify": if (bool.TryParse(val, out b)) cfg.SchedulerNotify = b; break;
                         case "SlotDayHour": if (int.TryParse(val, out i)) cfg.SlotDayHour = Clamp(i, 0, 23); break;
@@ -489,6 +664,7 @@ namespace LucentControl {
                 lines.Add("AutoSave=" + AutoSave);
                 lines.Add("AutoApplyProfile=" + AutoApplyProfile);
                 lines.Add("StartupProfile=" + StartupProfile);
+                lines.Add("UseHardwareLut=" + UseHardwareLut);
                 lines.Add("SchedulerEnabled=" + SchedulerEnabled);
                 lines.Add("SchedulerNotify=" + SchedulerNotify);
                 lines.Add("SlotDayHour=" + SlotDayHour);
@@ -533,9 +709,13 @@ namespace LucentControl {
         public double Red { get; set; }
         public double Green { get; set; }
         public double Blue { get; set; }
+        public double Vibrance { get; set; }
         public bool IsBuiltIn { get; set; }
 
-        public UserProfile(string name, double b, double c, double g, double t, double red, double green, double blue, bool isBuiltIn) {
+        public UserProfile(string name, double b, double c, double g, double t, double red, double green, double blue, bool isBuiltIn)
+            : this(name, b, c, g, t, red, green, blue, 1.0, isBuiltIn) { }
+
+        public UserProfile(string name, double b, double c, double g, double t, double red, double green, double blue, double vibrance, bool isBuiltIn) {
             Name = name;
             Brightness = b;
             Contrast = c;
@@ -544,6 +724,7 @@ namespace LucentControl {
             Red = red;
             Green = green;
             Blue = blue;
+            Vibrance = vibrance;
             IsBuiltIn = isBuiltIn;
         }
 
@@ -556,6 +737,7 @@ namespace LucentControl {
             s.Red = Red;
             s.Green = Green;
             s.Blue = Blue;
+            s.Vibrance = Vibrance;
             return s;
         }
 
@@ -567,6 +749,7 @@ namespace LucentControl {
             Red = s.Red;
             Green = s.Green;
             Blue = s.Blue;
+            Vibrance = s.Vibrance;
         }
 
         public bool Matches(DisplaySettings s) {
@@ -589,14 +772,14 @@ namespace LucentControl {
 
         public static List<UserProfile> CreateDefaults() {
             List<UserProfile> l = new List<UserProfile>();
-            l.Add(new UserProfile("Standard", 1.00, 1.00, 1.00, 6500, 1.00, 1.00, 1.00, true));
-            l.Add(new UserProfile("Warm", 0.85, 0.95, 1.05, 4500, 1.00, 0.95, 0.85, true));
-            l.Add(new UserProfile("Cool", 1.00, 1.10, 1.00, 8000, 0.92, 0.96, 1.00, true));
-            l.Add(new UserProfile("Movie", 0.90, 1.15, 1.15, 5800, 1.00, 0.95, 0.90, true));
-            l.Add(new UserProfile("Work", 0.80, 1.00, 1.00, 6000, 1.00, 1.00, 0.96, true));
-            l.Add(new UserProfile("Night", 0.65, 0.90, 1.00, 3400, 1.00, 0.84, 0.68, true));
-            l.Add(new UserProfile("Gaming", 1.00, 1.20, 1.25, 7000, 1.00, 1.00, 1.00, true));
-            l.Add(new UserProfile("Focus", 0.95, 1.30, 1.00, 6500, 1.00, 1.00, 1.00, true));
+            l.Add(new UserProfile("Standard", 1.00, 1.00, 1.00, 6500, 1.00, 1.00, 1.00, 1.00, true));
+            l.Add(new UserProfile("Warm", 0.85, 0.95, 1.05, 4500, 1.00, 0.95, 0.85, 0.95, true));
+            l.Add(new UserProfile("Cool", 1.00, 1.10, 1.00, 8000, 0.92, 0.96, 1.00, 1.05, true));
+            l.Add(new UserProfile("Movie", 0.90, 1.15, 1.15, 5800, 1.00, 0.95, 0.90, 1.20, true));
+            l.Add(new UserProfile("Work", 0.80, 1.00, 1.00, 6000, 1.00, 1.00, 0.96, 0.95, true));
+            l.Add(new UserProfile("Night", 0.65, 0.90, 1.00, 3400, 1.00, 0.84, 0.68, 0.85, true));
+            l.Add(new UserProfile("Gaming", 1.00, 1.20, 1.25, 7000, 1.00, 1.00, 1.00, 1.45, true));
+            l.Add(new UserProfile("Focus", 0.95, 1.30, 1.00, 6500, 1.00, 1.00, 1.00, 0.90, true));
             return l;
         }
 
@@ -647,10 +830,14 @@ namespace LucentControl {
                     s.Red = Clamp(v[4], 0, 1);
                     s.Green = Clamp(v[5], 0, 1);
                     s.Blue = Clamp(v[6], 0, 1);
+                    double vib = 1.0;
+                    if (p.Length >= 10 && double.TryParse(p[9], NumberStyles.Float, inv, out vib)) {
+                        s.Vibrance = Clamp(vib, 0.00, 2.00);
+                    }
 
                     UserProfile existing = Find(name);
                     if (existing != null) existing.SetFrom(s);   // override of a built-in (or duplicate line)
-                    else profiles.Add(new UserProfile(name, s.Brightness, s.Contrast, s.Gamma, s.Temperature, s.Red, s.Green, s.Blue, false));
+                    else profiles.Add(new UserProfile(name, s.Brightness, s.Contrast, s.Gamma, s.Temperature, s.Red, s.Green, s.Blue, s.Vibrance, false));
                 }
             } catch { }
         }
@@ -666,8 +853,8 @@ namespace LucentControl {
                         UserProfile def = defaults.Find(delegate(UserProfile d) { return d.Name == p.Name; });
                         if (def != null && def.Matches(p.ToSettings())) continue;
                     }
-                    lines.Add(string.Format(inv, "{0}|{1:F3}|{2:F3}|{3:F3}|{4:F0}|{5:F3}|{6:F3}|{7:F3}|{8}",
-                        p.Name, p.Brightness, p.Contrast, p.Gamma, p.Temperature, p.Red, p.Green, p.Blue, p.IsBuiltIn ? "B" : "C"));
+                    lines.Add(string.Format(inv, "{0}|{1:F3}|{2:F3}|{3:F3}|{4:F0}|{5:F3}|{6:F3}|{7:F3}|{8}|{9:F3}",
+                        p.Name, p.Brightness, p.Contrast, p.Gamma, p.Temperature, p.Red, p.Green, p.Blue, p.IsBuiltIn ? "B" : "C", p.Vibrance));
                 }
                 if (lines.Count == 0) {
                     if (File.Exists(AppPaths.ProfilesFile)) File.Delete(AppPaths.ProfilesFile);
@@ -697,7 +884,7 @@ namespace LucentControl {
             if (p != null) {
                 p.SetFrom(s);
             } else {
-                p = new UserProfile(name, s.Brightness, s.Contrast, s.Gamma, s.Temperature, s.Red, s.Green, s.Blue, false);
+                p = new UserProfile(name, s.Brightness, s.Contrast, s.Gamma, s.Temperature, s.Red, s.Green, s.Blue, s.Vibrance, false);
                 profiles.Add(p);
             }
             Save();

@@ -188,6 +188,48 @@ namespace LucentControl.Tests {
                 DwmEngine.ForceReapply();
             });
 
+            // 10. Color Vibrance Matrix & Profile Persistence
+            Run("Vibrance: Matriz Rec.709 (0% P&B, 100% neutro, 160% vibrante) e persistencia", delegate {
+                DisplaySettings mono = new DisplaySettings();
+                mono.Vibrance = 0.0;
+                float[] m = new float[25];
+                DwmEngine.BuildMatrix(mono, true, true, m);
+                if (Math.Abs(m[0] - 0.2126f) > 0.001f || Math.Abs(m[5] - 0.7152f) > 0.001f || Math.Abs(m[10] - 0.0722f) > 0.001f)
+                    throw new Exception("Vibrance 0% deveria produzir luminancia Rec.709");
+
+                DisplaySettings vivid = new DisplaySettings();
+                vivid.Brightness = 0.5;
+                vivid.Vibrance = 1.6;
+                // Modo vibrance-only (quando Hardware LUT cuida de brilho/contraste/gama):
+                DwmEngine.BuildMatrix(vivid, false, true, m);
+                double graySum = m[0] + m[5] + m[10];
+                if (Math.Abs(graySum - 1.0) > 0.001) throw new Exception("Soma da coluna para cinza neutro deve ser 1.0: " + graySum);
+                if (m[0] <= 1.0f || m[5] >= 0.0f) throw new Exception("Vibrance 160% deve aumentar canal primario e reduzir acoplamento cruzado");
+
+                ProfileManager pm = new ProfileManager();
+                pm.SaveProfile("VividTest", vivid);
+                ProfileManager pmReload = new ProfileManager();
+                UserProfile loaded = pmReload.Find("VividTest");
+                if (loaded == null || Math.Abs(loaded.Vibrance - 1.6) > 0.01) throw new Exception("ProfileManager nao persistiu Vibrance");
+            });
+
+            // 11. HardwareLutEngine Ramp & Config Flag
+            Run("HardwareLUT: Geracao da curva 16-bit e persistencia de UseHardwareLut", delegate {
+                DisplaySettings ds = new DisplaySettings();
+                ds.Gamma = 1.4;
+                ds.Brightness = 1.2;
+                ushort[] ramp = new ushort[768];
+                HardwareLutEngine.BuildRamp(ds, ramp);
+                if (ramp[0] != 0 || ramp[255] != 65535) throw new Exception("Extremos da rampa LUT invalidos");
+                if (ramp[128] <= 32768) throw new Exception("Gamma 1.4 + brilho 120% deve elevar meios-tons na rampa LUT");
+
+                AppConfig cfg = new AppConfig();
+                cfg.UseHardwareLut = true;
+                cfg.Save();
+                AppConfig cfg2 = AppConfig.Load();
+                if (!cfg2.UseHardwareLut) throw new Exception("AppConfig nao persistiu UseHardwareLut");
+            });
+
             // Limpa diretorio temporario de testes
             AppPaths.DataDirOverride = null;
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }

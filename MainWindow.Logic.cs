@@ -408,6 +408,11 @@ namespace LucentControl {
                 badgeGamma.Text = string.Format(CultureInfo.InvariantCulture, "{0:F2}", s.Gamma);
                 HighlightGammaTick();
             }
+            if (sliderVibrance != null) {
+                sliderVibrance.Value = s.Vibrance;
+                badgeVibrance.Text = string.Format("{0}%", (int)Math.Round(s.Vibrance * 100));
+                HighlightVibranceTick();
+            }
             if (sliderColorTemp != null) {
                 sliderColorTemp.Value = s.Temperature;
                 badgeColorTemp.Text = string.Format("{0} K", (int)Math.Round(s.Temperature));
@@ -428,23 +433,33 @@ namespace LucentControl {
             isUpdatingUi = false;
         }
 
-        private void HighlightBrightnessTick() {
-            if (sliderBrightness == null || brightTick0 == null || brightTick100Badge == null || brightTick200 == null) return;
-            double v = sliderBrightness.Value;
+        private void HighlightCenterPercentTick(Slider s, TextBlock t0, Border midBadge, TextBlock midText, TextBlock t200, Color accentColor, Color badgeBg) {
+            if (s == null || t0 == null || midBadge == null || t200 == null) return;
+            double v = s.Value;
             bool isMid = Math.Abs(v - 1.0) < 0.05;
             bool isMin = v <= 0.05;
             bool isMax = v >= 1.95;
 
-            brightTick0.Foreground = isMin ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
-            brightTick200.Foreground = isMax ? new SolidColorBrush(Color.FromRgb(56, 189, 248)) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            t0.Foreground = isMin ? new SolidColorBrush(accentColor) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            t200.Foreground = isMax ? new SolidColorBrush(accentColor) : new SolidColorBrush(Color.FromRgb(100, 116, 139));
 
             if (isMid) {
-                brightTick100Badge.Background = new SolidColorBrush(Color.FromArgb(90, 30, 58, 138));
-                brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+                midBadge.Background = new SolidColorBrush(badgeBg);
+                midText.Foreground = new SolidColorBrush(accentColor);
             } else {
-                brightTick100Badge.Background = Brushes.Transparent;
-                brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+                midBadge.Background = Brushes.Transparent;
+                midText.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
             }
+        }
+
+        private void HighlightBrightnessTick() {
+            HighlightCenterPercentTick(sliderBrightness, brightTick0, brightTick100Badge, brightTick100Text, brightTick200,
+                Color.FromRgb(56, 189, 248), Color.FromArgb(90, 30, 58, 138));
+        }
+
+        private void HighlightVibranceTick() {
+            HighlightCenterPercentTick(sliderVibrance, vibranceTick0, vibranceTick100Badge, vibranceTick100Text, vibranceTick200,
+                Color.FromRgb(244, 114, 182), Color.FromArgb(90, 131, 24, 67));
         }
 
         private void HighlightGammaTick() {
@@ -468,6 +483,7 @@ namespace LucentControl {
             s.Brightness = sliderBrightness.Value;
             s.Contrast = sliderContrast.Value;
             s.Gamma = sliderGamma.Value;
+            s.Vibrance = sliderVibrance != null ? sliderVibrance.Value : 1.0;
             s.Temperature = sliderColorTemp.Value;
             s.Red = sliderRed.Value;
             s.Green = sliderGreen.Value;
@@ -506,11 +522,35 @@ namespace LucentControl {
 
         public void ApplyAllActiveSettings() {
             DisplaySettings s = GetCurrentWorkingSettings();
-            DwmEngine.Apply(s, true);
-            overlayManager.Apply(screenDevices, settingsPerMonitor);
+            if (config.UseHardwareLut) {
+                bool lutOk = HardwareLutEngine.Apply(screenDevices, settingsPerMonitor);
+                if (lutOk) {
+                    // Hardware LUT handles brightness/contrast/gamma/temp/RGB over Start Menu, Taskbar & UAC;
+                    // DWM handles cross-channel Color Vibrance only (avoid double-applying).
+                    DwmEngine.Apply(s, false, true);
+                    overlayManager.CloseAll();
+                    return;
+                }
+                HardwareLutEngine.ResetAll(screenDevices);
+            } else {
+                HardwareLutEngine.ResetAll(screenDevices);
+            }
+
+            DwmEngine.Apply(s, syncAllMonitors, true);
+            if (syncAllMonitors) {
+                overlayManager.CloseAll();
+            } else {
+                overlayManager.Apply(screenDevices, settingsPerMonitor);
+            }
         }
 
         private void ApplyPreset(double b, double c, double g, double t, double red, double green, double blue, string profileName) {
+            UserProfile match = profileManager.Find(profileName);
+            double vib = match != null ? match.Vibrance : 1.0;
+            ApplyPreset(b, c, g, t, red, green, blue, vib, profileName);
+        }
+
+        private void ApplyPreset(double b, double c, double g, double t, double red, double green, double blue, double vibrance, string profileName) {
             DisplaySettings s = GetCurrentWorkingSettings();
             s.Brightness = b;
             s.Contrast = c;
@@ -519,6 +559,7 @@ namespace LucentControl {
             s.Red = red;
             s.Green = green;
             s.Blue = blue;
+            s.Vibrance = vibrance;
 
             if (syncAllMonitors) {
                 foreach (string k in settingsPerMonitor.Keys) {
@@ -669,7 +710,7 @@ namespace LucentControl {
                 lastAppliedScheduleSlot = slotKey;
                 UserProfile up = profileManager.Find(targetProf);
                 if (up != null) {
-                    ApplyPreset(up.Brightness, up.Contrast, up.Gamma, up.Temperature, up.Red, up.Green, up.Blue, up.Name);
+                    ApplyPreset(up.Brightness, up.Contrast, up.Gamma, up.Temperature, up.Red, up.Green, up.Blue, up.Vibrance, up.Name);
 
                     if (config.SchedulerNotify && trayIcon != null) {
                         string slotName = I18n.T("Slot" + slotKey);
@@ -731,12 +772,12 @@ namespace LucentControl {
             menu.MenuItems.Add(I18n.T("TrayOpen"), delegate { RestoreWindow(); });
             menu.MenuItems.Add(I18n.T("TraySettings"), delegate { RestoreWindow(); SwitchView(5); });
             menu.MenuItems.Add("-");
-            menu.MenuItems.Add(I18n.T("PresetWarm"), delegate { ApplyPreset(0.85, 0.95, 1.05, 4500, 1.0, 0.95, 0.85, "Warm"); });
-            menu.MenuItems.Add(I18n.T("PresetNeutral"), delegate { ApplyPreset(1.0, 1.0, 1.0, 6500, 1.0, 1.0, 1.0, "Standard"); });
-            menu.MenuItems.Add(I18n.T("PresetCool"), delegate { ApplyPreset(1.0, 1.10, 1.0, 8000, 0.92, 0.96, 1.0, "Cool"); });
-            menu.MenuItems.Add(I18n.T("PresetMovie"), delegate { ApplyPreset(0.90, 1.15, 1.15, 5800, 1.0, 0.95, 0.90, "Movie"); });
-            menu.MenuItems.Add(I18n.T("PresetWork"), delegate { ApplyPreset(0.80, 1.0, 1.0, 6000, 1.0, 1.0, 0.96, "Work"); });
-            menu.MenuItems.Add(I18n.T("PresetNight"), delegate { ApplyPreset(0.65, 0.90, 1.0, 3400, 1.0, 0.84, 0.68, "Night"); });
+            menu.MenuItems.Add(I18n.T("PresetWarm"), delegate { ApplyPreset(0.85, 0.95, 1.05, 4500, 1.0, 0.95, 0.85, 0.95, "Warm"); });
+            menu.MenuItems.Add(I18n.T("PresetNeutral"), delegate { ApplyPreset(1.0, 1.0, 1.0, 6500, 1.0, 1.0, 1.0, 1.00, "Standard"); });
+            menu.MenuItems.Add(I18n.T("PresetCool"), delegate { ApplyPreset(1.0, 1.10, 1.0, 8000, 0.92, 0.96, 1.0, 1.05, "Cool"); });
+            menu.MenuItems.Add(I18n.T("PresetMovie"), delegate { ApplyPreset(0.90, 1.15, 1.15, 5800, 1.0, 0.95, 0.90, 1.20, "Movie"); });
+            menu.MenuItems.Add(I18n.T("PresetWork"), delegate { ApplyPreset(0.80, 1.0, 1.0, 6000, 1.0, 1.0, 0.96, 0.95, "Work"); });
+            menu.MenuItems.Add(I18n.T("PresetNight"), delegate { ApplyPreset(0.65, 0.90, 1.0, 3400, 1.0, 0.84, 0.68, 0.85, "Night"); });
             menu.MenuItems.Add("-");
             menu.MenuItems.Add(I18n.T("ResetToDefault"), delegate { ResetCurrentOrAll(); });
             menu.MenuItems.Add("-");
@@ -821,6 +862,7 @@ namespace LucentControl {
                 trayIcon.Dispose();
             }
             DwmEngine.Reset();
+            HardwareLutEngine.ResetAll(screenDevices);
             if (overlayManager != null) {
                 overlayManager.CloseAll();
             }
@@ -851,6 +893,7 @@ namespace LucentControl {
             if (lblBrightnessTitle != null) lblBrightnessTitle.Text = I18n.T("Brightness");
             if (lblContrastTitle != null) lblContrastTitle.Text = I18n.T("Contrast");
             if (lblGammaTitle != null) lblGammaTitle.Text = I18n.T("Gamma");
+            if (lblVibranceTitle != null) lblVibranceTitle.Text = I18n.T("Vibrance");
             if (lblColorTempTitle != null) lblColorTempTitle.Text = I18n.T("ColorTemp");
             if (lblRedTitle != null) lblRedTitle.Text = I18n.T("Red");
             if (lblGreenTitle != null) lblGreenTitle.Text = I18n.T("Green");
@@ -905,6 +948,10 @@ namespace LucentControl {
             if (txtAutoApplyTitle != null) txtAutoApplyTitle.Text = I18n.T("AutoApplyTitle");
             if (txtAutoApplyDesc != null) txtAutoApplyDesc.Text = I18n.T("AutoApplyDesc");
             if (txtStartupProfileLabel != null) txtStartupProfileLabel.Text = I18n.T("StartupProfileLabel");
+            if (txtLutTitle != null) txtLutTitle.Text = I18n.T("LutTitle");
+            if (txtLutDesc != null) txtLutDesc.Text = I18n.T("LutDesc");
+            if (btnEnableDisplayLinkLut != null) btnEnableDisplayLinkLut.Content = I18n.T("BtnEnableDisplayLinkGamma");
+            UpdateHardwareLutState();
             if (txtDataSectionTitle != null) txtDataSectionTitle.Text = I18n.T("DataTitle");
             if (txtRestoreTitle != null) txtRestoreTitle.Text = I18n.T("RestoreTitle");
             if (txtRestoreDesc != null) txtRestoreDesc.Text = I18n.T("RestoreDesc");

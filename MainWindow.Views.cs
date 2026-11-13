@@ -63,9 +63,11 @@ namespace LucentControl {
             monitorCardsRow.Margin = new Thickness(0, 16, 0, 16);
             sp.Children.Add(monitorCardsRow);
 
-            // 3. Top Row Controls: Brightness, Contrast, Gamma (3 Columns)
+            // 3. Top Row Controls: Brightness, Contrast, Gamma, Color Vibrance (4 Columns)
             Grid topControls = new Grid();
             topControls.Margin = new Thickness(0, 0, 0, 14);
+            topControls.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            topControls.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(14) });
             topControls.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
             topControls.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(14) });
             topControls.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
@@ -86,6 +88,11 @@ namespace LucentControl {
             cardGamma.Child = CreateGammaControl();
             Grid.SetColumn(cardGamma, 4);
             topControls.Children.Add(cardGamma);
+
+            Border cardVibrance = CreateDashboardCard();
+            cardVibrance.Child = CreateVibranceControl();
+            Grid.SetColumn(cardVibrance, 6);
+            topControls.Children.Add(cardVibrance);
             sp.Children.Add(topControls);
 
             // 4. Middle Row Controls: Color Temp, Red, Green, Blue (4 Columns)
@@ -397,44 +404,49 @@ namespace LucentControl {
             g.Children.Add(sliderRow);
 
             // Reference labels row: 0% ... [100%] ... 200%
+            Grid labelsRow = CreatePercentRangeTicks(new Thickness(19, 6, 22, 0), Color.FromRgb(56, 189, 248), Color.FromArgb(90, 30, 58, 138), out brightTick0, out brightTick100Badge, out brightTick100Text, out brightTick200);
+            Grid.SetRow(labelsRow, 2);
+            g.Children.Add(labelsRow);
+            return g;
+        }
+
+        private Grid CreatePercentRangeTicks(Thickness margin, Color accentColor, Color badgeBg, out TextBlock t0, out Border midBadge, out TextBlock midText, out TextBlock t200) {
             Grid labelsRow = new Grid();
-            labelsRow.Margin = new Thickness(19, 6, 22, 0);
+            labelsRow.Margin = margin;
             labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
             labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
             labelsRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
 
-            brightTick0 = new TextBlock();
-            brightTick0.Text = "0%";
-            brightTick0.FontSize = 10;
-            brightTick0.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
-            brightTick0.HorizontalAlignment = HorizontalAlignment.Left;
-            labelsRow.Children.Add(brightTick0);
+            t0 = new TextBlock();
+            t0.Text = "0%";
+            t0.FontSize = 10;
+            t0.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            t0.HorizontalAlignment = HorizontalAlignment.Left;
+            labelsRow.Children.Add(t0);
 
-            brightTick100Badge = new Border();
-            brightTick100Badge.Background = new SolidColorBrush(Color.FromArgb(90, 30, 58, 138));
-            brightTick100Badge.CornerRadius = new CornerRadius(10);
-            brightTick100Badge.Padding = new Thickness(8, 2, 8, 2);
-            brightTick100Badge.HorizontalAlignment = HorizontalAlignment.Center;
-            brightTick100Text = new TextBlock();
-            brightTick100Text.Text = "100%";
-            brightTick100Text.FontSize = 10;
-            brightTick100Text.FontWeight = FontWeights.Bold;
-            brightTick100Text.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
-            brightTick100Badge.Child = brightTick100Text;
-            Grid.SetColumn(brightTick100Badge, 1);
-            labelsRow.Children.Add(brightTick100Badge);
+            midBadge = new Border();
+            midBadge.Background = new SolidColorBrush(badgeBg);
+            midBadge.CornerRadius = new CornerRadius(10);
+            midBadge.Padding = new Thickness(8, 2, 8, 2);
+            midBadge.HorizontalAlignment = HorizontalAlignment.Center;
+            midText = new TextBlock();
+            midText.Text = "100%";
+            midText.FontSize = 10;
+            midText.FontWeight = FontWeights.Bold;
+            midText.Foreground = new SolidColorBrush(accentColor);
+            midBadge.Child = midText;
+            Grid.SetColumn(midBadge, 1);
+            labelsRow.Children.Add(midBadge);
 
-            brightTick200 = new TextBlock();
-            brightTick200.Text = "200%";
-            brightTick200.FontSize = 10;
-            brightTick200.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
-            brightTick200.HorizontalAlignment = HorizontalAlignment.Right;
-            Grid.SetColumn(brightTick200, 2);
-            labelsRow.Children.Add(brightTick200);
+            t200 = new TextBlock();
+            t200.Text = "200%";
+            t200.FontSize = 10;
+            t200.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            t200.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(t200, 2);
+            labelsRow.Children.Add(t200);
 
-            Grid.SetRow(labelsRow, 2);
-            g.Children.Add(labelsRow);
-            return g;
+            return labelsRow;
         }
 
         private Grid CreateContrastControl() {
@@ -600,6 +612,61 @@ namespace LucentControl {
             tb.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
             tb.HorizontalAlignment = HorizontalAlignment.Center;
             return tb;
+        }
+
+        private Grid CreateVibranceControl() {
+            Grid g = new Grid();
+            g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
+
+            Grid topRow = new Grid();
+            topRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            topRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+
+            StackPanel titleSp = new StackPanel();
+            titleSp.Orientation = Orientation.Horizontal;
+
+            TextBlock icon = new TextBlock();
+            icon.Text = "◈";
+            icon.FontSize = 14;
+            icon.Foreground = new SolidColorBrush(Color.FromRgb(236, 72, 153));
+            icon.Margin = new Thickness(0, 0, 8, 0);
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            titleSp.Children.Add(icon);
+
+            lblVibranceTitle = new TextBlock();
+            lblVibranceTitle.Text = I18n.T("Vibrance");
+            lblVibranceTitle.FontSize = 13;
+            lblVibranceTitle.FontWeight = FontWeights.SemiBold;
+            lblVibranceTitle.Foreground = Brushes.White;
+            lblVibranceTitle.VerticalAlignment = VerticalAlignment.Center;
+            titleSp.Children.Add(lblVibranceTitle);
+            topRow.Children.Add(titleSp);
+
+            Border vibranceBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 100.0, false, delegate { return sliderVibrance; }, out badgeVibrance);
+            Grid.SetColumn(vibranceBadgeHost, 1);
+            topRow.Children.Add(vibranceBadgeHost);
+            Grid.SetRow(topRow, 0);
+            g.Children.Add(topRow);
+
+            sliderVibrance = new Slider();
+            sliderVibrance.Margin = new Thickness(0, 14, 0, 0);
+            ConfigureSlider(sliderVibrance, 0.00, 2.00, 1.00, 0.01, 0.10, sliderStyleVibrance);
+            sliderVibrance.ValueChanged += delegate {
+                if (!isUpdatingUi) {
+                    badgeVibrance.Text = string.Format("{0}%", (int)Math.Round(sliderVibrance.Value * 100));
+                    HighlightVibranceTick();
+                    OnControlChanged();
+                }
+            };
+            Grid.SetRow(sliderVibrance, 1);
+            g.Children.Add(sliderVibrance);
+
+            Grid labelsRow = CreatePercentRangeTicks(new Thickness(2, 6, 2, 0), Color.FromRgb(244, 114, 182), Color.FromArgb(90, 131, 24, 67), out vibranceTick0, out vibranceTick100Badge, out vibranceTick100Text, out vibranceTick200);
+            Grid.SetRow(labelsRow, 2);
+            g.Children.Add(labelsRow);
+            return g;
         }
 
         private Grid CreateColorTempControl() {
@@ -814,27 +881,27 @@ namespace LucentControl {
             pillsSp.VerticalAlignment = VerticalAlignment.Center;
 
             btnPresetWarm = CreatePresetPill("☼", I18n.T("PresetWarm"), false, delegate {
-                ApplyPreset(0.85, 0.95, 1.05, 4500, 1.0, 0.95, 0.85, "Warm");
+                ApplyPreset(0.85, 0.95, 1.05, 4500, 1.0, 0.95, 0.85, 0.95, "Warm");
                 HighlightPresetPill(btnPresetWarm);
             });
             btnPresetNeutral = CreatePresetPill("◎", I18n.T("PresetNeutral"), true, delegate {
-                ApplyPreset(1.0, 1.0, 1.0, 6500, 1.0, 1.0, 1.0, "Standard");
+                ApplyPreset(1.0, 1.0, 1.0, 6500, 1.0, 1.0, 1.0, 1.00, "Standard");
                 HighlightPresetPill(btnPresetNeutral);
             });
             btnPresetCool = CreatePresetPill("❄", I18n.T("PresetCool"), false, delegate {
-                ApplyPreset(1.0, 1.10, 1.0, 8000, 0.92, 0.96, 1.0, "Cool");
+                ApplyPreset(1.0, 1.10, 1.0, 8000, 0.92, 0.96, 1.0, 1.05, "Cool");
                 HighlightPresetPill(btnPresetCool);
             });
             btnPresetMovie = CreatePresetPill("🎞", I18n.T("PresetMovie"), false, delegate {
-                ApplyPreset(0.90, 1.15, 1.15, 5800, 1.0, 0.95, 0.90, "Movie");
+                ApplyPreset(0.90, 1.15, 1.15, 5800, 1.0, 0.95, 0.90, 1.20, "Movie");
                 HighlightPresetPill(btnPresetMovie);
             });
             btnPresetWork = CreatePresetPill("💻", I18n.T("PresetWork"), false, delegate {
-                ApplyPreset(0.80, 1.0, 1.0, 6000, 1.0, 1.0, 0.96, "Work");
+                ApplyPreset(0.80, 1.0, 1.0, 6000, 1.0, 1.0, 0.96, 0.95, "Work");
                 HighlightPresetPill(btnPresetWork);
             });
             btnPresetNight = CreatePresetPill("🌙", I18n.T("PresetNight"), false, delegate {
-                ApplyPreset(0.65, 0.90, 1.0, 3400, 1.0, 0.84, 0.68, "Night");
+                ApplyPreset(0.65, 0.90, 1.0, 3400, 1.0, 0.84, 0.68, 0.85, "Night");
                 HighlightPresetPill(btnPresetNight);
             });
 
@@ -974,7 +1041,7 @@ namespace LucentControl {
                     string profName = comboActiveProfile.SelectedItem.ToString();
                     UserProfile p = profileManager.Find(profName);
                     if (p != null) {
-                        ApplyPreset(p.Brightness, p.Contrast, p.Gamma, p.Temperature, p.Red, p.Green, p.Blue, p.Name);
+                        ApplyPreset(p.Brightness, p.Contrast, p.Gamma, p.Temperature, p.Red, p.Green, p.Blue, p.Vibrance, p.Name);
                         activeProfileName = p.Name;
                         hasCustomProfileAssigned = !p.IsBuiltIn;
                         hasUnsavedChanges = false;
@@ -1468,7 +1535,8 @@ namespace LucentControl {
             btmRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
 
             TextBlock st = new TextBlock();
-            st.Text = string.Format("Bri {0}%  ·  Con {1}%  ·  {2}K", (int)Math.Round(up.Brightness * 100), (int)Math.Round(up.Contrast * 100), (int)Math.Round(up.Temperature));
+            st.Text = string.Format("Bri {0}%  ·  Con {1}%  ·  Vib {2}%  ·  {3}K",
+                (int)Math.Round(up.Brightness * 100), (int)Math.Round(up.Contrast * 100), (int)Math.Round(up.Vibrance * 100), (int)Math.Round(up.Temperature));
             st.FontSize = 11;
             st.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
             st.VerticalAlignment = VerticalAlignment.Center;
@@ -1481,7 +1549,7 @@ namespace LucentControl {
             applyBtn.Padding = new Thickness(12, 0, 12, 0);
             UserProfile captured = up;
             applyBtn.Click += delegate {
-                ApplyPreset(captured.Brightness, captured.Contrast, captured.Gamma, captured.Temperature, captured.Red, captured.Green, captured.Blue, captured.Name);
+                ApplyPreset(captured.Brightness, captured.Contrast, captured.Gamma, captured.Temperature, captured.Red, captured.Green, captured.Blue, captured.Vibrance, captured.Name);
                 activeProfileName = captured.Name;
                 hasCustomProfileAssigned = !captured.IsBuiltIn;
                 hasUnsavedChanges = false;
@@ -1688,8 +1756,8 @@ namespace LucentControl {
 
             // Center: Summary Specs
             TextBlock specTb = new TextBlock();
-            specTb.Text = string.Format("{0}% Bri · {1}% Con · {2:F2} Gamma · {3}K",
-                (int)Math.Round(up.Brightness * 100), (int)Math.Round(up.Contrast * 100), up.Gamma, (int)Math.Round(up.Temperature));
+            specTb.Text = string.Format("{0}% Bri · {1}% Con · {2}% Vib · {3:F2} Gamma · {4}K",
+                (int)Math.Round(up.Brightness * 100), (int)Math.Round(up.Contrast * 100), (int)Math.Round(up.Vibrance * 100), up.Gamma, (int)Math.Round(up.Temperature));
             specTb.FontSize = 11;
             specTb.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
             specTb.VerticalAlignment = VerticalAlignment.Center;
@@ -1708,7 +1776,7 @@ namespace LucentControl {
             applyBtn.Padding = new Thickness(12, 0, 12, 0);
             UserProfile cap = up;
             applyBtn.Click += delegate {
-                ApplyPreset(cap.Brightness, cap.Contrast, cap.Gamma, cap.Temperature, cap.Red, cap.Green, cap.Blue, cap.Name);
+                ApplyPreset(cap.Brightness, cap.Contrast, cap.Gamma, cap.Temperature, cap.Red, cap.Green, cap.Blue, cap.Vibrance, cap.Name);
                 activeProfileName = cap.Name;
                 hasCustomProfileAssigned = !cap.IsBuiltIn;
                 hasUnsavedChanges = false;

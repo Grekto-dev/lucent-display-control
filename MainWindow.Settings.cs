@@ -319,6 +319,87 @@ namespace LucentControl {
             autoApplyCard.Child = autoApplySp;
             sp.Children.Add(autoApplyCard);
 
+            // 5b. Hardware Gamma LUT Card (Start Menu, Taskbar & UAC)
+            Border lutCard = CreateDashboardCard();
+            lutCard.Margin = new Thickness(0, 0, 0, 12);
+            StackPanel lutSp = new StackPanel();
+
+            Grid lutRow = new Grid();
+            lutRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            lutRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+
+            StackPanel lutInfo = new StackPanel();
+            txtLutTitle = new TextBlock();
+            txtLutTitle.Text = I18n.T("LutTitle");
+            txtLutTitle.FontSize = 14;
+            txtLutTitle.FontWeight = FontWeights.SemiBold;
+            txtLutTitle.Foreground = Brushes.White;
+            lutInfo.Children.Add(txtLutTitle);
+
+            txtLutDesc = new TextBlock();
+            txtLutDesc.Text = I18n.T("LutDesc");
+            txtLutDesc.FontSize = 12;
+            txtLutDesc.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            txtLutDesc.TextWrapping = TextWrapping.Wrap;
+            txtLutDesc.Margin = new Thickness(0, 4, 16, 0);
+            lutInfo.Children.Add(txtLutDesc);
+
+            Grid.SetColumn(lutInfo, 0);
+            lutRow.Children.Add(lutInfo);
+
+            chkUseHardwareLut = new CheckBox();
+            chkUseHardwareLut.IsChecked = config.UseHardwareLut;
+            chkUseHardwareLut.VerticalAlignment = VerticalAlignment.Center;
+            chkUseHardwareLut.Cursor = Cursors.Hand;
+            chkUseHardwareLut.Checked += delegate {
+                config.UseHardwareLut = true;
+                UpdateHardwareLutState();
+                ApplyAllActiveSettings();
+            };
+            chkUseHardwareLut.Unchecked += delegate {
+                config.UseHardwareLut = false;
+                UpdateHardwareLutState();
+                ApplyAllActiveSettings();
+            };
+            Grid.SetColumn(chkUseHardwareLut, 1);
+            lutRow.Children.Add(chkUseHardwareLut);
+            lutSp.Children.Add(lutRow);
+
+            subCardLutNotice = new Border();
+            subCardLutNotice.Margin = new Thickness(24, 12, 0, 0);
+            subCardLutNotice.Padding = new Thickness(12, 10, 12, 10);
+            subCardLutNotice.Background = new SolidColorBrush(Color.FromRgb(16, 20, 30));
+            subCardLutNotice.BorderBrush = new SolidColorBrush(Color.FromRgb(30, 38, 54));
+            subCardLutNotice.BorderThickness = new Thickness(1);
+            subCardLutNotice.CornerRadius = new CornerRadius(6);
+
+            Grid lutNoteRow = new Grid();
+            lutNoteRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            lutNoteRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+
+            txtLutStatusNote = new TextBlock();
+            txtLutStatusNote.FontSize = 11;
+            txtLutStatusNote.TextWrapping = TextWrapping.Wrap;
+            txtLutStatusNote.VerticalAlignment = VerticalAlignment.Center;
+            txtLutStatusNote.Margin = new Thickness(0, 0, 12, 0);
+            Grid.SetColumn(txtLutStatusNote, 0);
+            lutNoteRow.Children.Add(txtLutStatusNote);
+
+            btnEnableDisplayLinkLut = new Button();
+            btnEnableDisplayLinkLut.Style = darkButtonStyle;
+            btnEnableDisplayLinkLut.Content = I18n.T("BtnEnableDisplayLinkGamma");
+            btnEnableDisplayLinkLut.Height = 32;
+            btnEnableDisplayLinkLut.Padding = new Thickness(12, 0, 12, 0);
+            btnEnableDisplayLinkLut.Click += delegate { EnableDisplayLinkGammaAction(); };
+            Grid.SetColumn(btnEnableDisplayLinkLut, 1);
+            lutNoteRow.Children.Add(btnEnableDisplayLinkLut);
+
+            subCardLutNotice.Child = lutNoteRow;
+            lutSp.Children.Add(subCardLutNotice);
+
+            lutCard.Child = lutSp;
+            sp.Children.Add(lutCard);
+
             // 6. Presets & Data Management Card (Restore Defaults & Erase All)
             Border dataCard = CreateDashboardCard();
             dataCard.Margin = new Thickness(0, 0, 0, 12);
@@ -496,7 +577,41 @@ namespace LucentControl {
             g.Children.Add(scroll);
             UpdateStartupState();
             UpdateAutoApplyState();
+            UpdateHardwareLutState();
             return g;
+        }
+
+        private void UpdateHardwareLutState() {
+            if (subCardLutNotice == null || txtLutStatusNote == null || btnEnableDisplayLinkLut == null) return;
+            bool enabled = (chkUseHardwareLut != null && chkUseHardwareLut.IsChecked == true);
+            bool hasDisplayLink = HardwareLutEngine.IsDisplayLinkConnected(screenDevices);
+            bool dlGammaReady = HardwareLutEngine.IsDisplayLinkGammaEnabled();
+
+            if (!enabled) {
+                subCardLutNotice.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            subCardLutNotice.Visibility = Visibility.Visible;
+            if (hasDisplayLink && !dlGammaReady) {
+                txtLutStatusNote.Text = I18n.T("LutDisplayLinkWarn");
+                txtLutStatusNote.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                btnEnableDisplayLinkLut.Visibility = Visibility.Visible;
+            } else {
+                txtLutStatusNote.Text = I18n.T("LutReadyNote");
+                txtLutStatusNote.Foreground = new SolidColorBrush(Color.FromRgb(74, 222, 128));
+                btnEnableDisplayLinkLut.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void EnableDisplayLinkGammaAction() {
+            try {
+                Clipboard.SetText("reg add \"HKLM\\SOFTWARE\\DisplayLink\\Core\" /v EnableGammaRamp /t REG_SZ /d true /f");
+                if (lblSettingsSaveNotice != null) {
+                    lblSettingsSaveNotice.Text = I18n.T("LutDisplayLinkDone");
+                    lblSettingsSaveNotice.Visibility = Visibility.Visible;
+                }
+            } catch { }
         }
 
         private void UpdateStartupState() {
@@ -534,12 +649,14 @@ namespace LucentControl {
             config.MinimizeOnClose = (chkMinimizeOnClose.IsChecked == true);
             config.AutoSave = (chkAutoSave.IsChecked == true);
             config.AutoApplyProfile = (chkAutoApply.IsChecked == true);
+            config.UseHardwareLut = (chkUseHardwareLut != null && chkUseHardwareLut.IsChecked == true);
             if (comboStartupProfile.SelectedItem != null) {
                 config.StartupProfile = comboStartupProfile.SelectedItem.ToString();
             }
 
             AppConfig.SetAutoStart(config.StartWithWindows, config.StartMinimized);
             config.Save();
+            ApplyAllActiveSettings();
             UpdateTrayMenu();
         }
 
@@ -554,7 +671,7 @@ namespace LucentControl {
                 // If active profile was restored, reapply
                 UserProfile cur = profileManager.Find(activeProfileName);
                 if (cur != null) {
-                    ApplyPreset(cur.Brightness, cur.Contrast, cur.Gamma, cur.Temperature, cur.Red, cur.Green, cur.Blue, cur.Name);
+                    ApplyPreset(cur.Brightness, cur.Contrast, cur.Gamma, cur.Temperature, cur.Red, cur.Green, cur.Blue, cur.Vibrance, cur.Name);
                 }
 
                 if (lblSettingsSaveNotice != null) {
@@ -587,6 +704,7 @@ namespace LucentControl {
                 hasUnsavedChanges = false;
 
                 DwmEngine.Reset();
+                HardwareLutEngine.ResetAll(screenDevices);
                 overlayManager.CloseAll();
 
                 if (comboLanguage != null) comboLanguage.SelectedIndex = (int)AppLanguage.English;
@@ -595,9 +713,11 @@ namespace LucentControl {
                 if (chkMinimizeOnClose != null) chkMinimizeOnClose.IsChecked = true;
                 if (chkAutoSave != null) chkAutoSave.IsChecked = false;
                 if (chkAutoApply != null) chkAutoApply.IsChecked = false;
+                if (chkUseHardwareLut != null) chkUseHardwareLut.IsChecked = false;
 
                 UpdateStartupState();
                 UpdateAutoApplyState();
+                UpdateHardwareLutState();
                 PopulateProfilesDropdown(comboActiveProfile);
                 PopulateStartupProfilesCombo();
                 RefreshPresetsCatalog();

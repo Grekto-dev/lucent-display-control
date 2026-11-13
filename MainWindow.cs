@@ -39,6 +39,7 @@ namespace LucentControl {
         private Style darkTextBoxStyle;
         private Style sliderStyleBlue;
         private Style sliderStyleTemp;
+        private Style sliderStyleVibrance;
         private Style sliderStyleRed;
         private Style sliderStyleGreen;
         private Style sliderStyleBlueChannel;
@@ -68,6 +69,7 @@ namespace LucentControl {
         private Slider sliderBrightness;
         private Slider sliderContrast;
         private Slider sliderGamma;
+        private Slider sliderVibrance;
         private Slider sliderColorTemp;
         private Slider sliderRed;
         private Slider sliderGreen;
@@ -75,6 +77,7 @@ namespace LucentControl {
         private TextBlock badgeBrightness;
         private TextBlock badgeContrast;
         private TextBlock badgeGamma;
+        private TextBlock badgeVibrance;
         private TextBlock badgeColorTemp;
         private TextBlock badgeRed;
         private TextBlock badgeGreen;
@@ -88,6 +91,10 @@ namespace LucentControl {
         private Border brightTick100Badge;
         private TextBlock brightTick100Text;
         private TextBlock brightTick200;
+        private TextBlock vibranceTick0;
+        private Border vibranceTick100Badge;
+        private TextBlock vibranceTick100Text;
+        private TextBlock vibranceTick200;
         private TextBlock gammaTick18;
         private TextBlock gammaTick20;
         private Border gammaTick22Badge;
@@ -185,6 +192,12 @@ namespace LucentControl {
         private Border subCardStartupProfile;
         private TextBlock txtStartupProfileLabel;
         private ComboBox comboStartupProfile;
+        private TextBlock txtLutTitle;
+        private TextBlock txtLutDesc;
+        private CheckBox chkUseHardwareLut;
+        private Border subCardLutNotice;
+        private TextBlock txtLutStatusNote;
+        private Button btnEnableDisplayLinkLut;
         private TextBlock txtDataSectionTitle;
         private TextBlock txtRestoreTitle;
         private TextBlock txtRestoreDesc;
@@ -210,6 +223,7 @@ namespace LucentControl {
         private TextBlock lblBrightnessTitle;
         private TextBlock lblContrastTitle;
         private TextBlock lblGammaTitle;
+        private TextBlock lblVibranceTitle;
         private TextBlock lblColorTempTitle;
         private TextBlock lblRedTitle;
         private TextBlock lblGreenTitle;
@@ -581,6 +595,42 @@ namespace LucentControl {
                         </Grid>
                     </ControlTemplate>
 
+                    <!-- Gradient Color Vibrance Slider -->
+                    <ControlTemplate x:Key='VibranceSliderTemplate' TargetType='Slider'>
+                        <Grid VerticalAlignment='Center' Height='28'>
+                            <Border Height='6' CornerRadius='3'>
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint='0,0' EndPoint='1,0'>
+                                        <GradientStop Color='#FF64748B' Offset='0.0'/>
+                                        <GradientStop Color='#FFE2E8F0' Offset='0.5'/>
+                                        <GradientStop Color='#FFEC4899' Offset='0.78'/>
+                                        <GradientStop Color='#FF06B6D4' Offset='1.0'/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Width='20' Height='20' Cursor='Hand'>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType='Thumb'>
+                                                <Grid>
+                                                    <Ellipse Fill='#FFFFFFFF'/>
+                                                    <Ellipse Stroke='#FFEC4899' StrokeThickness='2'/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+
                     <!-- Red Channel Slider -->
                     <ControlTemplate x:Key='RedSliderTemplate' TargetType='Slider'>
                         <Grid VerticalAlignment='Center' Height='28'>
@@ -683,6 +733,9 @@ namespace LucentControl {
 
                 sliderStyleTemp = new Style(typeof(Slider));
                 sliderStyleTemp.Setters.Add(new Setter(Slider.TemplateProperty, dict["TempSliderTemplate"]));
+
+                sliderStyleVibrance = new Style(typeof(Slider));
+                sliderStyleVibrance.Setters.Add(new Setter(Slider.TemplateProperty, dict["VibranceSliderTemplate"]));
 
                 sliderStyleRed = new Style(typeof(Slider));
                 sliderStyleRed.Setters.Add(new Setter(Slider.TemplateProperty, dict["RedSliderTemplate"]));
