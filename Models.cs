@@ -425,6 +425,51 @@ namespace LucentControl {
                 return false;
             }
         }
+
+        public static bool EnableDisplayLinkGammaDirect() {
+            if (!AdminHelper.IsElevated()) return false;
+            try {
+                using (RegistryKey rk = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\DisplayLink\Core")) {
+                    if (rk == null) return false;
+                    rk.SetValue("EnableGammaRamp", "true", RegistryValueKind.String);
+                    return true;
+                }
+            } catch {
+                return false;
+            }
+        }
+    }
+
+    public static class AdminHelper {
+        public static bool IsElevated() {
+            try {
+                using (System.Security.Principal.WindowsIdentity id = System.Security.Principal.WindowsIdentity.GetCurrent()) {
+                    System.Security.Principal.WindowsPrincipal principal = new System.Security.Principal.WindowsPrincipal(id);
+                    return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                }
+            } catch {
+                return false;
+            }
+        }
+
+        public static bool RelaunchElevated(string extraArgs) {
+            try {
+                string exePath = System.Reflection.Assembly.GetEntryAssembly() != null
+                    ? System.Reflection.Assembly.GetEntryAssembly().Location
+                    : System.Reflection.Assembly.GetExecutingAssembly().Location;
+                if (string.IsNullOrEmpty(exePath)) return false;
+
+                System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo();
+                psi.FileName = exePath;
+                psi.Arguments = extraArgs ?? "";
+                psi.UseShellExecute = true;
+                psi.Verb = "runas";
+                System.Diagnostics.Process.Start(psi);
+                return true;
+            } catch {
+                return false;
+            }
+        }
     }
 
     public static class SliderValueParser {
@@ -598,6 +643,7 @@ namespace LucentControl {
         public bool AutoApplyProfile = false;
         public string StartupProfile = "Standard";
         public bool UseHardwareLut = false;
+        public bool RunAsAdmin = false;
 
         // Scheduler
         public bool SchedulerEnabled = false;
@@ -637,6 +683,7 @@ namespace LucentControl {
                         case "AutoApplyProfile": if (bool.TryParse(val, out b)) cfg.AutoApplyProfile = b; break;
                         case "StartupProfile": if (val.Length > 0) cfg.StartupProfile = val; break;
                         case "UseHardwareLut": if (bool.TryParse(val, out b)) cfg.UseHardwareLut = b; break;
+                        case "RunAsAdmin": if (bool.TryParse(val, out b)) cfg.RunAsAdmin = b; break;
                         case "SchedulerEnabled": if (bool.TryParse(val, out b)) cfg.SchedulerEnabled = b; break;
                         case "SchedulerNotify": if (bool.TryParse(val, out b)) cfg.SchedulerNotify = b; break;
                         case "SlotDayHour": if (int.TryParse(val, out i)) cfg.SlotDayHour = Clamp(i, 0, 23); break;
@@ -665,6 +712,7 @@ namespace LucentControl {
                 lines.Add("AutoApplyProfile=" + AutoApplyProfile);
                 lines.Add("StartupProfile=" + StartupProfile);
                 lines.Add("UseHardwareLut=" + UseHardwareLut);
+                lines.Add("RunAsAdmin=" + RunAsAdmin);
                 lines.Add("SchedulerEnabled=" + SchedulerEnabled);
                 lines.Add("SchedulerNotify=" + SchedulerNotify);
                 lines.Add("SlotDayHour=" + SlotDayHour);

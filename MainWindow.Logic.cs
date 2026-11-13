@@ -950,8 +950,14 @@ namespace LucentControl {
             if (txtStartupProfileLabel != null) txtStartupProfileLabel.Text = I18n.T("StartupProfileLabel");
             if (txtLutTitle != null) txtLutTitle.Text = I18n.T("LutTitle");
             if (txtLutDesc != null) txtLutDesc.Text = I18n.T("LutDesc");
-            if (btnEnableDisplayLinkLut != null) btnEnableDisplayLinkLut.Content = I18n.T("BtnEnableDisplayLinkGamma");
+            if (btnEnableDisplayLinkLut != null) btnEnableDisplayLinkLut.Content = AdminHelper.IsElevated()
+                ? I18n.T("BtnEnableDisplayLinkDirect")
+                : I18n.T("BtnEnableDisplayLinkGamma");
             UpdateHardwareLutState();
+            if (txtAdminTitle != null) txtAdminTitle.Text = I18n.T("RunAsAdminTitle");
+            if (txtAdminDesc != null) txtAdminDesc.Text = I18n.T("RunAsAdminDesc");
+            if (btnRestartAsAdmin != null) btnRestartAsAdmin.Content = I18n.T("BtnRestartAsAdmin");
+            UpdateAdminState();
             if (txtDataSectionTitle != null) txtDataSectionTitle.Text = I18n.T("DataTitle");
             if (txtRestoreTitle != null) txtRestoreTitle.Text = I18n.T("RestoreTitle");
             if (txtRestoreDesc != null) txtRestoreDesc.Text = I18n.T("RestoreDesc");
@@ -972,6 +978,12 @@ namespace LucentControl {
                 string editTip = I18n.T("ClickToEditValue");
                 for (int i = 0; i < editableBadgeBorders.Count; i++) {
                     editableBadgeBorders[i].ToolTip = editTip;
+                }
+            }
+            if (resetControlButtons != null) {
+                string resetTip = I18n.T("ResetControlTip");
+                for (int i = 0; i < resetControlButtons.Count; i++) {
+                    resetControlButtons[i].ToolTip = resetTip;
                 }
             }
 

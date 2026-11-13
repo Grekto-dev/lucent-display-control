@@ -210,7 +210,11 @@ namespace LucentControl {
             s.PreviewMouseDown += delegate { s.Focus(); };
         }
 
-        private Border CreateEditableBadge(string initialText, double min, double max, double displayScale, bool isDecimal, Func<Slider> getSlider, out TextBlock badgeLabel) {
+        private FrameworkElement CreateEditableBadge(string initialText, double min, double max, double defaultValue, double displayScale, bool isDecimal, Func<Slider> getSlider, out TextBlock badgeLabel) {
+            StackPanel group = new StackPanel();
+            group.Orientation = Orientation.Horizontal;
+            group.VerticalAlignment = VerticalAlignment.Center;
+
             Border container = new Border();
             container.CornerRadius = new CornerRadius(4);
             container.Padding = new Thickness(6, 2, 6, 2);
@@ -326,7 +330,60 @@ namespace LucentControl {
                 commitEdit();
             };
 
-            return container;
+            group.Children.Add(container);
+
+            Button resetBtn = new Button();
+            resetBtn.Width = 20;
+            resetBtn.Height = 20;
+            resetBtn.Margin = new Thickness(3, 0, 0, 0);
+            resetBtn.Cursor = Cursors.Hand;
+            resetBtn.Focusable = false;
+            resetBtn.VerticalAlignment = VerticalAlignment.Center;
+            resetBtn.ToolTip = I18n.T("ResetControlTip");
+
+            TextBlock resetIcon = new TextBlock();
+            resetIcon.Text = "\uE72C";
+            resetIcon.FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol");
+            resetIcon.FontSize = 10;
+            resetIcon.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            resetIcon.HorizontalAlignment = HorizontalAlignment.Center;
+            resetIcon.VerticalAlignment = VerticalAlignment.Center;
+
+            ControlTemplate flatIconTpl = new ControlTemplate(typeof(Button));
+            FrameworkElementFactory iconBorder = new FrameworkElementFactory(typeof(Border));
+            iconBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+            iconBorder.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            FrameworkElementFactory cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            iconBorder.AppendChild(cp);
+            flatIconTpl.VisualTree = iconBorder;
+
+            resetBtn.Template = flatIconTpl;
+            resetBtn.Background = Brushes.Transparent;
+            resetBtn.Content = resetIcon;
+
+            resetBtn.MouseEnter += delegate {
+                resetBtn.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+                resetIcon.Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+            };
+            resetBtn.MouseLeave += delegate {
+                resetBtn.Background = Brushes.Transparent;
+                resetIcon.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+            };
+            resetBtn.Click += delegate {
+                exitEdit();
+                Slider target = getSlider();
+                if (target != null) {
+                    target.Value = defaultValue;
+                    target.Focus();
+                }
+            };
+
+            resetControlButtons.Add(resetBtn);
+            group.Children.Add(resetBtn);
+
+            return group;
         }
 
         private Grid CreateBrightnessControl() {
@@ -359,7 +416,7 @@ namespace LucentControl {
             titleSp.Children.Add(lblBrightnessTitle);
             topRow.Children.Add(titleSp);
 
-            Border brightnessBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 100.0, false, delegate { return sliderBrightness; }, out badgeBrightness);
+            FrameworkElement brightnessBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 1.00, 100.0, false, delegate { return sliderBrightness; }, out badgeBrightness);
             Grid.SetColumn(brightnessBadgeHost, 1);
             topRow.Children.Add(brightnessBadgeHost);
             Grid.SetRow(topRow, 0);
@@ -478,7 +535,7 @@ namespace LucentControl {
             titleSp.Children.Add(lblContrastTitle);
             topRow.Children.Add(titleSp);
 
-            Border contrastBadgeHost = CreateEditableBadge("100%", 0.50, 1.50, 100.0, false, delegate { return sliderContrast; }, out badgeContrast);
+            FrameworkElement contrastBadgeHost = CreateEditableBadge("100%", 0.50, 1.50, 1.00, 100.0, false, delegate { return sliderContrast; }, out badgeContrast);
             Grid.SetColumn(contrastBadgeHost, 1);
             topRow.Children.Add(contrastBadgeHost);
             Grid.SetRow(topRow, 0);
@@ -553,7 +610,7 @@ namespace LucentControl {
             titleSp.Children.Add(lblGammaTitle);
             topRow.Children.Add(titleSp);
 
-            Border gammaBadgeHost = CreateEditableBadge("1.00", 0.60, 2.00, 1.0, true, delegate { return sliderGamma; }, out badgeGamma);
+            FrameworkElement gammaBadgeHost = CreateEditableBadge("1.00", 0.60, 2.00, 1.00, 1.0, true, delegate { return sliderGamma; }, out badgeGamma);
             Grid.SetColumn(gammaBadgeHost, 1);
             topRow.Children.Add(gammaBadgeHost);
             Grid.SetRow(topRow, 0);
@@ -644,7 +701,7 @@ namespace LucentControl {
             titleSp.Children.Add(lblVibranceTitle);
             topRow.Children.Add(titleSp);
 
-            Border vibranceBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 100.0, false, delegate { return sliderVibrance; }, out badgeVibrance);
+            FrameworkElement vibranceBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 1.00, 100.0, false, delegate { return sliderVibrance; }, out badgeVibrance);
             Grid.SetColumn(vibranceBadgeHost, 1);
             topRow.Children.Add(vibranceBadgeHost);
             Grid.SetRow(topRow, 0);
@@ -699,7 +756,7 @@ namespace LucentControl {
             titleSp.Children.Add(lblColorTempTitle);
             topRow.Children.Add(titleSp);
 
-            Border colorTempBadgeHost = CreateEditableBadge("6500 K", 3000, 9000, 1.0, false, delegate { return sliderColorTemp; }, out badgeColorTemp);
+            FrameworkElement colorTempBadgeHost = CreateEditableBadge("6500 K", 3000, 9000, 6500.0, 1.0, false, delegate { return sliderColorTemp; }, out badgeColorTemp);
             Grid.SetColumn(colorTempBadgeHost, 1);
             topRow.Children.Add(colorTempBadgeHost);
             Grid.SetRow(topRow, 0);
@@ -794,7 +851,7 @@ namespace LucentControl {
             ConfigureSlider(s, 0.0, 1.0, 1.0, 0.01, 0.10, sliderStyle);
 
             TextBlock badge;
-            Border channelBadgeHost = CreateEditableBadge("100", 0.0, 1.0, 100.0, false, delegate { return s; }, out badge);
+            FrameworkElement channelBadgeHost = CreateEditableBadge("100", 0.0, 1.0, 1.0, 100.0, false, delegate { return s; }, out badge);
             Grid.SetColumn(channelBadgeHost, 1);
             topRow.Children.Add(channelBadgeHost);
             outBadge = badge;

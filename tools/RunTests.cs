@@ -230,6 +230,18 @@ namespace LucentControl.Tests {
                 if (!cfg2.UseHardwareLut) throw new Exception("AppConfig nao persistiu UseHardwareLut");
             });
 
+            // 12. Admin Elevation Helper & Config Persistence
+            Run("Admin: Verificacao de privilegio e persistencia de RunAsAdmin", delegate {
+                bool elevated = AdminHelper.IsElevated();
+                if (elevated != true && elevated != false) throw new Exception("Retorno invalido");
+
+                AppConfig cfg = new AppConfig();
+                cfg.RunAsAdmin = true;
+                cfg.Save();
+                AppConfig reloaded = AppConfig.Load();
+                if (!reloaded.RunAsAdmin) throw new Exception("AppConfig nao persistiu RunAsAdmin");
+            });
+
             // Limpa diretorio temporario de testes
             AppPaths.DataDirOverride = null;
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }

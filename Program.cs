@@ -17,11 +17,24 @@ namespace LucentControl {
 
                 bool startMinimized = false;
                 bool isRender = false;
+                bool noElevate = false;
                 foreach (string arg in args) {
                     if (arg.Equals("/minimized", StringComparison.OrdinalIgnoreCase) || arg.Equals("-minimized", StringComparison.OrdinalIgnoreCase)) {
                         startMinimized = true;
                     } else if (arg.Equals("/render", StringComparison.OrdinalIgnoreCase) || arg.Equals("-render", StringComparison.OrdinalIgnoreCase)) {
                         isRender = true;
+                    } else if (arg.Equals("--no-elevate", StringComparison.OrdinalIgnoreCase)) {
+                        noElevate = true;
+                    }
+                }
+
+                if (!isRender && !noElevate) {
+                    AppConfig bootCfg = AppConfig.Load();
+                    if (bootCfg.RunAsAdmin && !AdminHelper.IsElevated()) {
+                        string relaunchArgs = startMinimized ? "/minimized --no-elevate" : "--no-elevate";
+                        if (AdminHelper.RelaunchElevated(relaunchArgs)) {
+                            return;
+                        }
                     }
                 }
 

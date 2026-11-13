@@ -83,6 +83,7 @@ namespace LucentControl {
         private TextBlock badgeGreen;
         private TextBlock badgeBlue;
         private List<Border> editableBadgeBorders = new List<Border>();
+        private List<Button> resetControlButtons = new List<Button>();
         private List<Action> cancelActiveBadgeEdits = new List<Action>();
         private NativeMethods.WinEventDelegate winEventDelegate;
         private IntPtr winEventHook = IntPtr.Zero;
@@ -198,6 +199,11 @@ namespace LucentControl {
         private Border subCardLutNotice;
         private TextBlock txtLutStatusNote;
         private Button btnEnableDisplayLinkLut;
+        private TextBlock txtAdminTitle;
+        private TextBlock txtAdminDesc;
+        private CheckBox chkRunAsAdmin;
+        private TextBlock txtAdminStatusBadge;
+        private Button btnRestartAsAdmin;
         private TextBlock txtDataSectionTitle;
         private TextBlock txtRestoreTitle;
         private TextBlock txtRestoreDesc;

@@ -400,6 +400,76 @@ namespace LucentControl {
             lutCard.Child = lutSp;
             sp.Children.Add(lutCard);
 
+            // 5c. Run as Administrator Card
+            Border adminCard = CreateDashboardCard();
+            adminCard.Margin = new Thickness(0, 0, 0, 12);
+            StackPanel adminSp = new StackPanel();
+
+            Grid adminRow = new Grid();
+            adminRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            adminRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+
+            StackPanel adminInfo = new StackPanel();
+            txtAdminTitle = new TextBlock();
+            txtAdminTitle.Text = I18n.T("RunAsAdminTitle");
+            txtAdminTitle.FontSize = 14;
+            txtAdminTitle.FontWeight = FontWeights.SemiBold;
+            txtAdminTitle.Foreground = Brushes.White;
+            adminInfo.Children.Add(txtAdminTitle);
+
+            txtAdminDesc = new TextBlock();
+            txtAdminDesc.Text = I18n.T("RunAsAdminDesc");
+            txtAdminDesc.FontSize = 12;
+            txtAdminDesc.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            txtAdminDesc.TextWrapping = TextWrapping.Wrap;
+            txtAdminDesc.Margin = new Thickness(0, 4, 16, 0);
+            adminInfo.Children.Add(txtAdminDesc);
+
+            Grid.SetColumn(adminInfo, 0);
+            adminRow.Children.Add(adminInfo);
+
+            chkRunAsAdmin = new CheckBox();
+            chkRunAsAdmin.IsChecked = config.RunAsAdmin;
+            chkRunAsAdmin.VerticalAlignment = VerticalAlignment.Center;
+            chkRunAsAdmin.Cursor = Cursors.Hand;
+            Grid.SetColumn(chkRunAsAdmin, 1);
+            adminRow.Children.Add(chkRunAsAdmin);
+            adminSp.Children.Add(adminRow);
+
+            Border adminStatusBox = new Border();
+            adminStatusBox.Margin = new Thickness(24, 12, 0, 0);
+            adminStatusBox.Padding = new Thickness(12, 10, 12, 10);
+            adminStatusBox.Background = new SolidColorBrush(Color.FromRgb(16, 20, 30));
+            adminStatusBox.BorderBrush = new SolidColorBrush(Color.FromRgb(30, 38, 54));
+            adminStatusBox.BorderThickness = new Thickness(1);
+            adminStatusBox.CornerRadius = new CornerRadius(6);
+
+            Grid adminStatusRow = new Grid();
+            adminStatusRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+            adminStatusRow.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+
+            txtAdminStatusBadge = new TextBlock();
+            txtAdminStatusBadge.FontSize = 11;
+            txtAdminStatusBadge.VerticalAlignment = VerticalAlignment.Center;
+            txtAdminStatusBadge.Margin = new Thickness(0, 0, 12, 0);
+            Grid.SetColumn(txtAdminStatusBadge, 0);
+            adminStatusRow.Children.Add(txtAdminStatusBadge);
+
+            btnRestartAsAdmin = new Button();
+            btnRestartAsAdmin.Style = darkButtonStyle;
+            btnRestartAsAdmin.Content = I18n.T("BtnRestartAsAdmin");
+            btnRestartAsAdmin.Height = 30;
+            btnRestartAsAdmin.Padding = new Thickness(12, 0, 12, 0);
+            btnRestartAsAdmin.Click += delegate { RestartAsAdminAction(); };
+            Grid.SetColumn(btnRestartAsAdmin, 1);
+            adminStatusRow.Children.Add(btnRestartAsAdmin);
+
+            adminStatusBox.Child = adminStatusRow;
+            adminSp.Children.Add(adminStatusBox);
+
+            adminCard.Child = adminSp;
+            sp.Children.Add(adminCard);
+
             // 6. Presets & Data Management Card (Restore Defaults & Erase All)
             Border dataCard = CreateDashboardCard();
             dataCard.Margin = new Thickness(0, 0, 0, 12);
@@ -578,7 +648,30 @@ namespace LucentControl {
             UpdateStartupState();
             UpdateAutoApplyState();
             UpdateHardwareLutState();
+            UpdateAdminState();
             return g;
+        }
+
+        private void UpdateAdminState() {
+            if (txtAdminStatusBadge == null || btnRestartAsAdmin == null) return;
+            bool isAdmin = AdminHelper.IsElevated();
+            if (isAdmin) {
+                txtAdminStatusBadge.Text = I18n.T("StatusAdminActive");
+                txtAdminStatusBadge.Foreground = new SolidColorBrush(Color.FromRgb(74, 222, 128));
+                btnRestartAsAdmin.Visibility = Visibility.Collapsed;
+            } else {
+                txtAdminStatusBadge.Text = I18n.T("StatusAdminStandard");
+                txtAdminStatusBadge.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+                btnRestartAsAdmin.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void RestartAsAdminAction() {
+            SaveSettingsState();
+            profileManager.Save();
+            if (AdminHelper.RelaunchElevated("--no-elevate")) {
+                RealExit();
+            }
         }
 
         private void UpdateHardwareLutState() {
@@ -596,6 +689,9 @@ namespace LucentControl {
             if (hasDisplayLink && !dlGammaReady) {
                 txtLutStatusNote.Text = I18n.T("LutDisplayLinkWarn");
                 txtLutStatusNote.Foreground = new SolidColorBrush(Color.FromRgb(251, 191, 36));
+                btnEnableDisplayLinkLut.Content = AdminHelper.IsElevated()
+                    ? I18n.T("BtnEnableDisplayLinkDirect")
+                    : I18n.T("BtnEnableDisplayLinkGamma");
                 btnEnableDisplayLinkLut.Visibility = Visibility.Visible;
             } else {
                 txtLutStatusNote.Text = I18n.T("LutReadyNote");
@@ -606,6 +702,14 @@ namespace LucentControl {
 
         private void EnableDisplayLinkGammaAction() {
             try {
+                if (AdminHelper.IsElevated() && HardwareLutEngine.EnableDisplayLinkGammaDirect()) {
+                    UpdateHardwareLutState();
+                    if (lblSettingsSaveNotice != null) {
+                        lblSettingsSaveNotice.Text = I18n.T("LutDirectDone");
+                        lblSettingsSaveNotice.Visibility = Visibility.Visible;
+                    }
+                    return;
+                }
                 Clipboard.SetText("reg add \"HKLM\\SOFTWARE\\DisplayLink\\Core\" /v EnableGammaRamp /t REG_SZ /d true /f");
                 if (lblSettingsSaveNotice != null) {
                     lblSettingsSaveNotice.Text = I18n.T("LutDisplayLinkDone");
@@ -650,6 +754,7 @@ namespace LucentControl {
             config.AutoSave = (chkAutoSave.IsChecked == true);
             config.AutoApplyProfile = (chkAutoApply.IsChecked == true);
             config.UseHardwareLut = (chkUseHardwareLut != null && chkUseHardwareLut.IsChecked == true);
+            config.RunAsAdmin = (chkRunAsAdmin != null && chkRunAsAdmin.IsChecked == true);
             if (comboStartupProfile.SelectedItem != null) {
                 config.StartupProfile = comboStartupProfile.SelectedItem.ToString();
             }
@@ -714,10 +819,12 @@ namespace LucentControl {
                 if (chkAutoSave != null) chkAutoSave.IsChecked = false;
                 if (chkAutoApply != null) chkAutoApply.IsChecked = false;
                 if (chkUseHardwareLut != null) chkUseHardwareLut.IsChecked = false;
+                if (chkRunAsAdmin != null) chkRunAsAdmin.IsChecked = false;
 
                 UpdateStartupState();
                 UpdateAutoApplyState();
                 UpdateHardwareLutState();
+                UpdateAdminState();
                 PopulateProfilesDropdown(comboActiveProfile);
                 PopulateStartupProfilesCombo();
                 RefreshPresetsCatalog();
