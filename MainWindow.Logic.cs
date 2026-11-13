@@ -386,6 +386,11 @@ namespace LucentControl {
         }
 
         private void UpdateUiFromSettings() {
+            if (cancelActiveBadgeEdits != null) {
+                for (int i = 0; i < cancelActiveBadgeEdits.Count; i++) {
+                    cancelActiveBadgeEdits[i]();
+                }
+            }
             isUpdatingUi = true;
             DisplaySettings s = GetCurrentWorkingSettings();
 
@@ -479,6 +484,7 @@ namespace LucentControl {
             if (config.AutoSave) {
                 // First-time save prompt if user has not named a custom profile yet
                 if (!hasCustomProfileAssigned) {
+                    System.Windows.Input.Mouse.Capture(null);
                     string promptTitle = I18n.T("NewProfileTitle");
                     string promptDesc = I18n.T("CustomPresetDesc");
                     string defaultName = profileManager.UniqueName("Custom");
@@ -754,10 +760,62 @@ namespace LucentControl {
             }
         }
 
+        private void InitShellWatcher() {
+            if (shellReapplyTimer == null) {
+                shellReapplyTimer = new DispatcherTimer();
+                shellReapplyTimer.Interval = TimeSpan.FromMilliseconds(80);
+                shellReapplyTimer.Tick += delegate {
+                    shellReapplyTimer.Stop();
+                    DwmEngine.ForceReapply();
+                    if (overlayManager != null) {
+                        overlayManager.EnsureTopMost();
+                    }
+                };
+            }
+
+            if (winEventHook == IntPtr.Zero) {
+                winEventDelegate = new NativeMethods.WinEventDelegate(OnShellWinEvent);
+                winEventHook = NativeMethods.SetWinEventHook(
+                    NativeMethods.EVENT_SYSTEM_FOREGROUND,
+                    NativeMethods.EVENT_SYSTEM_MENUEND,
+                    IntPtr.Zero,
+                    winEventDelegate,
+                    0,
+                    0,
+                    NativeMethods.WINEVENT_OUTOFCONTEXT
+                );
+            }
+
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnSystemDisplaySettingsChanged;
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnSystemDisplaySettingsChanged;
+        }
+
+        private void OnShellWinEvent(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime) {
+            ScheduleShellReapply();
+        }
+
+        private void OnSystemDisplaySettingsChanged(object sender, EventArgs e) {
+            ScheduleShellReapply();
+        }
+
+        private void ScheduleShellReapply() {
+            if (shellReapplyTimer == null) return;
+            shellReapplyTimer.Stop();
+            shellReapplyTimer.Start();
+        }
+
         private void RealExit() {
             if (schedulerTimer != null) {
                 schedulerTimer.Stop();
             }
+            if (shellReapplyTimer != null) {
+                shellReapplyTimer.Stop();
+            }
+            if (winEventHook != IntPtr.Zero) {
+                NativeMethods.UnhookWinEvent(winEventHook);
+                winEventHook = IntPtr.Zero;
+            }
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnSystemDisplaySettingsChanged;
             if (trayIcon != null) {
                 trayIcon.Visible = false;
                 trayIcon.Dispose();
@@ -862,6 +920,13 @@ namespace LucentControl {
             if (btnSettingsOK != null) btnSettingsOK.Content = I18n.T("BtnOK");
             if (btnSettingsCancel != null) btnSettingsCancel.Content = I18n.T("BtnCancel");
             if (lblSettingsSaveNotice != null) lblSettingsSaveNotice.Text = I18n.T("SavedNotice");
+
+            if (editableBadgeBorders != null) {
+                string editTip = I18n.T("ClickToEditValue");
+                for (int i = 0; i < editableBadgeBorders.Count; i++) {
+                    editableBadgeBorders[i].ToolTip = editTip;
+                }
+            }
 
             UpdateTrayMenu();
         }

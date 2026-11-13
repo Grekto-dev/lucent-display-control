@@ -79,6 +79,11 @@ namespace LucentControl {
         private TextBlock badgeRed;
         private TextBlock badgeGreen;
         private TextBlock badgeBlue;
+        private List<Border> editableBadgeBorders = new List<Border>();
+        private List<Action> cancelActiveBadgeEdits = new List<Action>();
+        private NativeMethods.WinEventDelegate winEventDelegate;
+        private IntPtr winEventHook = IntPtr.Zero;
+        private DispatcherTimer shellReapplyTimer;
         private TextBlock brightTick0;
         private Border brightTick100Badge;
         private TextBlock brightTick100Text;
@@ -251,6 +256,7 @@ namespace LucentControl {
             Loaded += delegate {
                 IntPtr hwnd = new WindowInteropHelper(this).Handle;
                 NativeMethods.EnableDarkMode(hwnd);
+                InitShellWatcher();
                 ApplyAllActiveSettings();
 
                 if (config.SchedulerEnabled) {
@@ -499,11 +505,31 @@ namespace LucentControl {
                         </Setter>
                     </Style>
 
+                    <!-- Transparent Slider Track RepeatButton -->
+                    <Style x:Key='SliderRepeatButtonStyle' TargetType='RepeatButton'>
+                        <Setter Property='OverridesDefaultStyle' Value='True'/>
+                        <Setter Property='IsTabStop' Value='False'/>
+                        <Setter Property='Focusable' Value='False'/>
+                        <Setter Property='Template'>
+                            <Setter.Value>
+                                <ControlTemplate TargetType='RepeatButton'>
+                                    <Border Background='Transparent' Height='28' Cursor='Hand'/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+
                     <!-- Modern Blue Slider -->
                     <ControlTemplate x:Key='BlueSliderTemplate' TargetType='Slider'>
                         <Grid VerticalAlignment='Center' Height='28'>
                             <Border Height='6' CornerRadius='3' Background='#FF222634'/>
                             <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
                                     <Thumb Width='20' Height='20' Cursor='Hand'>
                                         <Thumb.Template>
@@ -533,6 +559,12 @@ namespace LucentControl {
                                 </Border.Background>
                             </Border>
                             <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
                                     <Thumb Width='20' Height='20' Cursor='Hand'>
                                         <Thumb.Template>
@@ -554,6 +586,12 @@ namespace LucentControl {
                         <Grid VerticalAlignment='Center' Height='28'>
                             <Border Height='6' CornerRadius='3' Background='#FFEF4444'/>
                             <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
                                     <Thumb Width='20' Height='20' Cursor='Hand'>
                                         <Thumb.Template>
@@ -575,6 +613,12 @@ namespace LucentControl {
                         <Grid VerticalAlignment='Center' Height='28'>
                             <Border Height='6' CornerRadius='3' Background='#FF22C55E'/>
                             <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
                                     <Thumb Width='20' Height='20' Cursor='Hand'>
                                         <Thumb.Template>
@@ -596,6 +640,12 @@ namespace LucentControl {
                         <Grid VerticalAlignment='Center' Height='28'>
                             <Border Height='6' CornerRadius='3' Background='#FF3B82F6'/>
                             <Track x:Name='PART_Track'>
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.DecreaseLarge'/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style='{StaticResource SliderRepeatButtonStyle}' Command='Slider.IncreaseLarge'/>
+                                </Track.IncreaseRepeatButton>
                                 <Track.Thumb>
                                     <Thumb Width='20' Height='20' Cursor='Hand'>
                                         <Thumb.Template>

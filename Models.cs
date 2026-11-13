@@ -76,6 +76,21 @@ namespace LucentControl {
         public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         public const uint SWP_NOACTIVATE = 0x0010;
         public const uint SWP_SHOWWINDOW = 0x0040;
+        public const uint SWP_NOMOVE = 0x0002;
+        public const uint SWP_NOSIZE = 0x0001;
+
+        public delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        public static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+        public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+        public const uint EVENT_SYSTEM_MENUSTART = 0x0004;
+        public const uint EVENT_SYSTEM_MENUEND = 0x0005;
+        public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
         [DllImport("kernel32.dll")]
         public static extern bool SetProcessWorkingSetSize(IntPtr process, IntPtr minimumWorkingSetSize, IntPtr maximumWorkingSetSize);
@@ -219,6 +234,17 @@ namespace LucentControl {
             return true;
         }
 
+        /// <summary>Re-asserts the active color matrix in DWM after shell/focus transitions.</summary>
+        public static void ForceReapply() {
+            if (!hasLast || IsIdentity(last)) return;
+            if (!isInitialized) {
+                isInitialized = MagInitialize();
+                if (!isInitialized) return;
+            }
+            Array.Copy(last, effect.transform, 25);
+            MagSetFullscreenColorEffect(ref effect);
+        }
+
         public static void Reset() {
             if (isInitialized) {
                 float[] m = effect.transform;
@@ -229,6 +255,35 @@ namespace LucentControl {
                 isInitialized = false;
             }
             hasLast = false;
+        }
+    }
+
+    public static class SliderValueParser {
+        /// <summary>Parses a typed display adjustment value (supporting %, K, commas/dots) and clamps it to slider bounds.</summary>
+        public static bool TryParseSliderValue(string rawText, double min, double max, double displayScale, bool isDecimal, out double sliderValue) {
+            sliderValue = 0.0;
+            if (string.IsNullOrEmpty(rawText)) return false;
+            string s = rawText.Trim().Replace("%", "").Replace("K", "").Replace("k", "").Replace(",", ".").Trim();
+            double parsed;
+            if (!double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) {
+                return false;
+            }
+            if (double.IsNaN(parsed) || double.IsInfinity(parsed)) return false;
+
+            double target = parsed / displayScale;
+            if (target < min) target = min;
+            if (target > max) target = max;
+
+            if (isDecimal) {
+                target = Math.Round(target, 2);
+            } else {
+                target = Math.Round(target * displayScale) / displayScale;
+            }
+            if (target < min) target = min;
+            if (target > max) target = max;
+
+            sliderValue = target;
+            return true;
         }
     }
 

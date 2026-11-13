@@ -80,6 +80,13 @@ namespace LucentControl {
             };
         }
 
+        public void BringToTopMost() {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero) {
+                NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, pixelBounds.X, pixelBounds.Y, pixelBounds.Width, pixelBounds.Height, NativeMethods.SWP_NOACTIVATE);
+            }
+        }
+
         public void ApplySettings(DisplaySettings s) {
             if (s.Brightness < 1.0) {
                 dimRect.Fill = Black;
@@ -346,6 +353,12 @@ namespace LucentControl {
                         break;
                     }
                 }
+            }
+        }
+
+        public void EnsureTopMost() {
+            foreach (KeyValuePair<string, ScreenOverlay> kvp in overlays) {
+                try { kvp.Value.BringToTopMost(); } catch { }
             }
         }
 

@@ -191,6 +191,137 @@ namespace LucentControl {
             return b;
         }
 
+        private void ConfigureSlider(Slider s, double min, double max, double val, double smallChange, double largeChange, Style style) {
+            s.Minimum = min;
+            s.Maximum = max;
+            s.Value = val;
+            s.SmallChange = smallChange;
+            s.LargeChange = largeChange;
+            s.IsMoveToPointEnabled = true;
+            s.Focusable = true;
+            s.Style = style;
+            s.PreviewMouseDown += delegate { s.Focus(); };
+        }
+
+        private Border CreateEditableBadge(string initialText, double min, double max, double displayScale, bool isDecimal, Func<Slider> getSlider, out TextBlock badgeLabel) {
+            Border container = new Border();
+            container.CornerRadius = new CornerRadius(4);
+            container.Padding = new Thickness(6, 2, 6, 2);
+            container.Cursor = Cursors.Hand;
+            container.Background = Brushes.Transparent;
+            container.BorderBrush = Brushes.Transparent;
+            container.BorderThickness = new Thickness(1);
+            container.VerticalAlignment = VerticalAlignment.Center;
+            container.ToolTip = I18n.T("ClickToEditValue");
+
+            Grid holder = new Grid();
+
+            TextBlock lbl = new TextBlock();
+            lbl.Text = initialText;
+            lbl.FontSize = 12;
+            lbl.FontWeight = FontWeights.SemiBold;
+            lbl.Foreground = Brushes.White;
+            lbl.VerticalAlignment = VerticalAlignment.Center;
+            badgeLabel = lbl;
+            holder.Children.Add(lbl);
+
+            TextBox editor = new TextBox();
+            editor.Visibility = Visibility.Collapsed;
+            editor.MinWidth = 48;
+            editor.Width = 64;
+            editor.Padding = new Thickness(4, 1, 4, 1);
+            editor.FontSize = 12;
+            editor.FontWeight = FontWeights.SemiBold;
+            editor.TextAlignment = TextAlignment.Right;
+            editor.VerticalContentAlignment = VerticalAlignment.Center;
+            editor.Background = new SolidColorBrush(Color.FromRgb(15, 23, 42));
+            editor.Foreground = Brushes.White;
+            editor.CaretBrush = Brushes.White;
+            editor.BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246));
+            editor.BorderThickness = new Thickness(1);
+            holder.Children.Add(editor);
+
+            container.Child = holder;
+
+            bool isEditing = false;
+
+            Action exitEdit = delegate {
+                if (!isEditing) return;
+                isEditing = false;
+                editor.Visibility = Visibility.Collapsed;
+                lbl.Visibility = Visibility.Visible;
+                container.Background = Brushes.Transparent;
+                container.BorderBrush = Brushes.Transparent;
+            };
+
+            Action commitEdit = delegate {
+                if (!isEditing) return;
+                Slider target = getSlider();
+                string raw = editor.Text;
+                exitEdit();
+                if (target != null) {
+                    double parsed;
+                    if (SliderValueParser.TryParseSliderValue(raw, min, max, displayScale, isDecimal, out parsed)) {
+                        target.Value = parsed;
+                        target.Focus();
+                    }
+                }
+            };
+
+            editableBadgeBorders.Add(container);
+            cancelActiveBadgeEdits.Add(exitEdit);
+
+            container.MouseEnter += delegate {
+                if (!isEditing) {
+                    container.Background = new SolidColorBrush(Color.FromRgb(30, 41, 59));
+                    container.BorderBrush = new SolidColorBrush(Color.FromRgb(59, 130, 246));
+                }
+            };
+            container.MouseLeave += delegate {
+                if (!isEditing) {
+                    container.Background = Brushes.Transparent;
+                    container.BorderBrush = Brushes.Transparent;
+                }
+            };
+
+            container.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e) {
+                if (isEditing) return;
+                e.Handled = true;
+                isEditing = true;
+                Slider target = getSlider();
+                double cur = target != null ? target.Value : min;
+                editor.Text = isDecimal
+                    ? cur.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : Math.Round(cur * displayScale).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                lbl.Visibility = Visibility.Collapsed;
+                editor.Visibility = Visibility.Visible;
+                container.Background = Brushes.Transparent;
+                container.BorderBrush = Brushes.Transparent;
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, new Action(delegate {
+                    editor.Focus();
+                    editor.SelectAll();
+                }));
+            };
+
+            editor.KeyDown += delegate(object s, KeyEventArgs e) {
+                if (e.Key == Key.Enter) {
+                    e.Handled = true;
+                    commitEdit();
+                } else if (e.Key == Key.Escape) {
+                    e.Handled = true;
+                    exitEdit();
+                    Slider target = getSlider();
+                    if (target != null) target.Focus();
+                }
+            };
+
+            editor.LostKeyboardFocus += delegate {
+                commitEdit();
+            };
+
+            return container;
+        }
+
         private Grid CreateBrightnessControl() {
             Grid g = new Grid();
             g.RowDefinitions.Add(new RowDefinition() { Height = GridLength.Auto });
@@ -221,14 +352,9 @@ namespace LucentControl {
             titleSp.Children.Add(lblBrightnessTitle);
             topRow.Children.Add(titleSp);
 
-            badgeBrightness = new TextBlock();
-            badgeBrightness.Text = "100%";
-            badgeBrightness.FontSize = 12;
-            badgeBrightness.FontWeight = FontWeights.SemiBold;
-            badgeBrightness.Foreground = Brushes.White;
-            badgeBrightness.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badgeBrightness, 1);
-            topRow.Children.Add(badgeBrightness);
+            Border brightnessBadgeHost = CreateEditableBadge("100%", 0.00, 2.00, 100.0, false, delegate { return sliderBrightness; }, out badgeBrightness);
+            Grid.SetColumn(brightnessBadgeHost, 1);
+            topRow.Children.Add(brightnessBadgeHost);
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
 
@@ -247,10 +373,7 @@ namespace LucentControl {
             sliderRow.Children.Add(iconDim);
 
             sliderBrightness = new Slider();
-            sliderBrightness.Minimum = 0.00;
-            sliderBrightness.Maximum = 2.00;
-            sliderBrightness.Value = 1.00;
-            sliderBrightness.Style = sliderStyleBlue;
+            ConfigureSlider(sliderBrightness, 0.00, 2.00, 1.00, 0.01, 0.10, sliderStyleBlue);
             sliderBrightness.ValueChanged += delegate {
                 if (!isUpdatingUi) {
                     badgeBrightness.Text = string.Format("{0}%", (int)Math.Round(sliderBrightness.Value * 100));
@@ -343,14 +466,9 @@ namespace LucentControl {
             titleSp.Children.Add(lblContrastTitle);
             topRow.Children.Add(titleSp);
 
-            badgeContrast = new TextBlock();
-            badgeContrast.Text = "100%";
-            badgeContrast.FontSize = 12;
-            badgeContrast.FontWeight = FontWeights.SemiBold;
-            badgeContrast.Foreground = Brushes.White;
-            badgeContrast.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badgeContrast, 1);
-            topRow.Children.Add(badgeContrast);
+            Border contrastBadgeHost = CreateEditableBadge("100%", 0.50, 1.50, 100.0, false, delegate { return sliderContrast; }, out badgeContrast);
+            Grid.SetColumn(contrastBadgeHost, 1);
+            topRow.Children.Add(contrastBadgeHost);
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
 
@@ -369,10 +487,7 @@ namespace LucentControl {
             sliderRow.Children.Add(iconLow);
 
             sliderContrast = new Slider();
-            sliderContrast.Minimum = 0.50;
-            sliderContrast.Maximum = 1.50;
-            sliderContrast.Value = 1.00;
-            sliderContrast.Style = sliderStyleBlue;
+            ConfigureSlider(sliderContrast, 0.50, 1.50, 1.00, 0.01, 0.10, sliderStyleBlue);
             sliderContrast.ValueChanged += delegate {
                 if (!isUpdatingUi) {
                     badgeContrast.Text = string.Format("{0}%", (int)Math.Round(sliderContrast.Value * 100));
@@ -426,23 +541,15 @@ namespace LucentControl {
             titleSp.Children.Add(lblGammaTitle);
             topRow.Children.Add(titleSp);
 
-            badgeGamma = new TextBlock();
-            badgeGamma.Text = "1.00";
-            badgeGamma.FontSize = 12;
-            badgeGamma.FontWeight = FontWeights.SemiBold;
-            badgeGamma.Foreground = Brushes.White;
-            badgeGamma.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badgeGamma, 1);
-            topRow.Children.Add(badgeGamma);
+            Border gammaBadgeHost = CreateEditableBadge("1.00", 0.60, 2.00, 1.0, true, delegate { return sliderGamma; }, out badgeGamma);
+            Grid.SetColumn(gammaBadgeHost, 1);
+            topRow.Children.Add(gammaBadgeHost);
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
 
             sliderGamma = new Slider();
             sliderGamma.Margin = new Thickness(0, 14, 0, 0);
-            sliderGamma.Minimum = 0.60;
-            sliderGamma.Maximum = 2.00;
-            sliderGamma.Value = 1.00;
-            sliderGamma.Style = sliderStyleBlue;
+            ConfigureSlider(sliderGamma, 0.60, 2.00, 1.00, 0.01, 0.10, sliderStyleBlue);
             sliderGamma.ValueChanged += delegate {
                 if (!isUpdatingUi) {
                     badgeGamma.Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F2}", sliderGamma.Value);
@@ -525,23 +632,15 @@ namespace LucentControl {
             titleSp.Children.Add(lblColorTempTitle);
             topRow.Children.Add(titleSp);
 
-            badgeColorTemp = new TextBlock();
-            badgeColorTemp.Text = "6500 K";
-            badgeColorTemp.FontSize = 12;
-            badgeColorTemp.FontWeight = FontWeights.SemiBold;
-            badgeColorTemp.Foreground = Brushes.White;
-            badgeColorTemp.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badgeColorTemp, 1);
-            topRow.Children.Add(badgeColorTemp);
+            Border colorTempBadgeHost = CreateEditableBadge("6500 K", 3000, 9000, 1.0, false, delegate { return sliderColorTemp; }, out badgeColorTemp);
+            Grid.SetColumn(colorTempBadgeHost, 1);
+            topRow.Children.Add(colorTempBadgeHost);
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
 
             sliderColorTemp = new Slider();
             sliderColorTemp.Margin = new Thickness(0, 14, 0, 0);
-            sliderColorTemp.Minimum = 3000;
-            sliderColorTemp.Maximum = 9000;
-            sliderColorTemp.Value = 6500;
-            sliderColorTemp.Style = sliderStyleTemp;
+            ConfigureSlider(sliderColorTemp, 3000, 9000, 6500, 50, 500, sliderStyleTemp);
             sliderColorTemp.ValueChanged += delegate {
                 if (!isUpdatingUi) {
                     badgeColorTemp.Text = string.Format("{0} K", (int)Math.Round(sliderColorTemp.Value));
@@ -623,24 +722,17 @@ namespace LucentControl {
             titleSp.Children.Add(lbl);
             topRow.Children.Add(titleSp);
 
-            TextBlock badge = new TextBlock();
-            badge.Text = "100";
-            badge.FontSize = 12;
-            badge.FontWeight = FontWeights.SemiBold;
-            badge.Foreground = Brushes.White;
-            badge.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(badge, 1);
-            topRow.Children.Add(badge);
+            Slider s = new Slider();
+            s.Margin = new Thickness(0, 14, 0, 0);
+            ConfigureSlider(s, 0.0, 1.0, 1.0, 0.01, 0.10, sliderStyle);
+
+            TextBlock badge;
+            Border channelBadgeHost = CreateEditableBadge("100", 0.0, 1.0, 100.0, false, delegate { return s; }, out badge);
+            Grid.SetColumn(channelBadgeHost, 1);
+            topRow.Children.Add(channelBadgeHost);
             outBadge = badge;
             Grid.SetRow(topRow, 0);
             g.Children.Add(topRow);
-
-            Slider s = new Slider();
-            s.Margin = new Thickness(0, 14, 0, 0);
-            s.Minimum = 0.0;
-            s.Maximum = 1.0;
-            s.Value = 1.0;
-            s.Style = sliderStyle;
             TextBlock bRef = badge;
             s.ValueChanged += delegate {
                 if (!isUpdatingUi) {

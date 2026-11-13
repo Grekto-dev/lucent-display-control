@@ -164,6 +164,30 @@ namespace LucentControl.Tests {
                 if (p == null || Math.Abs(p.Brightness - 1.85) > 0.01) throw new Exception("ProfileManager nao preservou brilho 185%");
             });
 
+            // 9. Manual Numeric Entry Parser & DwmEngine.ForceReapply
+            Run("Input: SliderValueParser (% / K / virgula / clamp) e ForceReapply", delegate {
+                double v;
+                if (!SliderValueParser.TryParseSliderValue("145%", 0.0, 2.0, 100.0, false, out v) || Math.Abs(v - 1.45) > 0.001)
+                    throw new Exception("Falha ao interpretar '145%'");
+
+                if (!SliderValueParser.TryParseSliderValue("1,25", 0.6, 2.0, 1.0, true, out v) || Math.Abs(v - 1.25) > 0.001)
+                    throw new Exception("Falha ao interpretar gamma '1,25'");
+
+                if (!SliderValueParser.TryParseSliderValue("4800 K", 3000, 9000, 1.0, false, out v) || Math.Abs(v - 4800) > 0.01)
+                    throw new Exception("Falha ao interpretar '4800 K'");
+
+                if (!SliderValueParser.TryParseSliderValue("999", 0.0, 2.0, 100.0, false, out v) || Math.Abs(v - 2.0) > 0.001)
+                    throw new Exception("Falha no clamp maximo (999 -> 2.0)");
+
+                if (!SliderValueParser.TryParseSliderValue("-10", 0.5, 1.5, 100.0, false, out v) || Math.Abs(v - 0.5) > 0.001)
+                    throw new Exception("Falha no clamp minimo (-10 -> 0.5)");
+
+                if (SliderValueParser.TryParseSliderValue("abc", 0.0, 2.0, 100.0, false, out v))
+                    throw new Exception("Texto invalido nao deveria ser aceito");
+
+                DwmEngine.ForceReapply();
+            });
+
             // Limpa diretorio temporario de testes
             AppPaths.DataDirOverride = null;
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }

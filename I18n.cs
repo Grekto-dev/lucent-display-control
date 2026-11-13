@@ -221,7 +221,8 @@ namespace LucentControl {
             { "ProfileLabel", new string[] { "Profile:", "Perfil:", "Perfil:", "Profil :", "Profilo:", "配置：", "プロファイル:" } },
             { "SchedulerPaused", new string[] { "Automatic scheduler is paused.", "O agendador automático está pausado.", "El programador automático está en pausa.", "Le planificateur automatique est en pause.", "Il pianificatore automatico è in pausa.", "自动计划已暂停。", "自動スケジューラは一時停止中です。" } },
             { "SchedulerActiveNow", new string[] { "Scheduler active — now: {0}", "Agendador ativo — agora: {0}", "Programador activo — ahora: {0}", "Planificateur actif — maintenant : {0}", "Pianificatore attivo — ora: {0}", "计划运行中 — 当前：{0}", "スケジューラ有効 — 現在: {0}" } },
-            { "SchedNotify", new string[] { "Scheduled profile applied: {0}", "Perfil agendado aplicado: {0}", "Perfil programado aplicado: {0}", "Profil planifié appliqué : {0}", "Profilo pianificato applicato: {0}", "已应用计划配置：{0}", "スケジュールされたプロファイルを適用: {0}" } }
+            { "SchedNotify", new string[] { "Scheduled profile applied: {0}", "Perfil agendado aplicado: {0}", "Perfil programado aplicado: {0}", "Profil planifié appliqué : {0}", "Profilo pianificato applicato: {0}", "已应用计划配置：{0}", "スケジュールされたプロファイルを適用: {0}" } },
+            { "ClickToEditValue", new string[] { "Click to enter value manually", "Clique para digitar o valor manualmente", "Haga clic para ingresar el valor manualmente", "Cliquez pour saisir la valeur manuellement", "Fai clic per inserire il valore manualmente", "点击手动输入数值", "クリックして数値を直接入力" } }
         };
 
         public static string T(string key) {
