@@ -555,7 +555,7 @@ namespace LucentControl {
             dataCard.Child = dataSp;
             sp.Children.Add(dataCard);
 
-            // 7. About Card with Version 0.1.0
+            // 7. About Card with Version 0.2.0
             Border aboutCard = CreateDashboardCard();
             aboutCard.Margin = new Thickness(0, 0, 0, 18);
             StackPanel aboutSp = new StackPanel();
@@ -632,8 +632,23 @@ namespace LucentControl {
             btnSettingsCancel.Height = 36;
             btnSettingsCancel.Padding = new Thickness(18, 0, 18, 0);
             btnSettingsCancel.Click += delegate {
+                config = AppConfig.Load();
                 I18n.CurrentLanguage = I18n.CommittedLanguage;
                 comboLanguage.SelectedIndex = (int)I18n.CurrentLanguage;
+                chkStartWithWindows.IsChecked = config.StartWithWindows;
+                chkStartMinimized.IsChecked = config.StartMinimized;
+                chkMinimizeOnClose.IsChecked = config.MinimizeOnClose;
+                chkAutoSave.IsChecked = config.AutoSave;
+                chkAutoApply.IsChecked = config.AutoApplyProfile;
+                if (chkUseHardwareLut != null) chkUseHardwareLut.IsChecked = config.UseHardwareLut;
+                if (chkRunAsAdmin != null) chkRunAsAdmin.IsChecked = config.RunAsAdmin;
+                if (comboStartupProfile != null) {
+                    int sIdx = comboStartupProfile.Items.IndexOf(config.StartupProfile);
+                    comboStartupProfile.SelectedIndex = (sIdx >= 0) ? sIdx : 0;
+                    comboStartupProfile.IsEnabled = config.AutoApplyProfile;
+                }
+                UpdateHardwareLutState();
+                ApplyAllActiveSettings();
                 UpdateAllTexts();
                 SwitchView(0);
             };

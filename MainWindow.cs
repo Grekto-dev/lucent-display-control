@@ -51,6 +51,7 @@ namespace LucentControl {
         private Button btnNavProfiles;
         private Button btnNavScheduler;
         private Button btnNavSettings;
+        private Button btnNavHelp;
         private List<Button> navButtons;
 
         // Views
@@ -60,6 +61,10 @@ namespace LucentControl {
         private Grid viewProfiles;
         private Grid viewScheduler;
         private Grid viewSettings;
+        private Grid viewHelp;
+        private TextBlock helpTitle;
+        private TextBlock helpSubtitle;
+        private readonly List<Action> helpTextUpdaters = new List<Action>();
         public ScrollViewer scrollSettings;
         private List<Grid> allViews;
 
@@ -798,6 +803,7 @@ namespace LucentControl {
             viewProfiles = CreateProfilesView();
             viewScheduler = CreateSchedulerView();
             viewSettings = CreateSettingsView();
+            viewHelp = CreateHelpView();
 
             allViews = new List<Grid>() {
                 viewDashboard,
@@ -805,7 +811,8 @@ namespace LucentControl {
                 viewPresets,
                 viewProfiles,
                 viewScheduler,
-                viewSettings
+                viewSettings,
+                viewHelp
             };
 
             for (int i = 0; i < allViews.Count; i++) {
@@ -957,6 +964,7 @@ namespace LucentControl {
             btnNavProfiles = CreateSidebarBtn("\uE77B", I18n.T("NavProfiles"), false, delegate { SwitchView(3); });
             btnNavScheduler = CreateSidebarBtn("\uE823", I18n.T("NavScheduler"), false, delegate { SwitchView(4); });
             btnNavSettings = CreateSidebarBtn("\uE713", I18n.T("NavSettings"), false, delegate { SwitchView(5); });
+            btnNavHelp = CreateSidebarBtn("\uE897", I18n.T("NavHelp"), false, delegate { SwitchView(6); });
 
             navButtons = new List<Button>() {
                 btnNavDashboard,
@@ -964,7 +972,8 @@ namespace LucentControl {
                 btnNavPresets,
                 btnNavProfiles,
                 btnNavScheduler,
-                btnNavSettings
+                btnNavSettings,
+                btnNavHelp
             };
 
             foreach (Button nb in navButtons) {
@@ -995,7 +1004,7 @@ namespace LucentControl {
             foot.Children.Add(statusRow);
 
             TextBlock verTb = new TextBlock();
-            verTb.Text = "Lucent Display Control v0.1.0";
+            verTb.Text = "Lucent Display Control v0.2.0";
             verTb.FontSize = 10;
             verTb.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
             verTb.Margin = new Thickness(6, 0, 0, 0);

@@ -82,6 +82,8 @@ namespace LucentControl {
                         capture(Path.Combine(outDir, "render_presets_v2.png"));
                         win.SwitchView(3);
                         capture(Path.Combine(outDir, "render_profiles_v2.png"));
+                        win.SwitchView(6);
+                        capture(Path.Combine(outDir, "render_help_v2.png"));
 
                         win.Close();
                     } catch (Exception ex) {

@@ -2008,7 +2008,7 @@ namespace LucentControl {
             right.VerticalAlignment = VerticalAlignment.Center;
 
             TextBlock timeLbl = new TextBlock();
-            timeLbl.Text = "Time:";
+            timeLbl.Text = I18n.T("TimeLabel");
             timeLbl.FontSize = 12;
             timeLbl.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
             timeLbl.VerticalAlignment = VerticalAlignment.Center;
@@ -2044,12 +2044,16 @@ namespace LucentControl {
             outMin = cbM;
 
             TextBlock profLbl = new TextBlock();
-            profLbl.Text = "Profile:";
+            profLbl.Text = I18n.T("ProfileLabel");
             profLbl.FontSize = 12;
             profLbl.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
             profLbl.VerticalAlignment = VerticalAlignment.Center;
             profLbl.Margin = new Thickness(14, 0, 6, 0);
             right.Children.Add(profLbl);
+            helpTextUpdaters.Add(delegate {
+                timeLbl.Text = I18n.T("TimeLabel");
+                profLbl.Text = I18n.T("ProfileLabel");
+            });
 
             ComboBox cbP = new ComboBox();
             cbP.Style = darkComboBoxStyle;
@@ -2068,6 +2072,106 @@ namespace LucentControl {
 
             b.Child = g;
             return b;
+        }
+        #endregion
+
+        #region View 7: Help & Documentation
+        private Grid CreateHelpView() {
+            Grid g = new Grid();
+            g.Visibility = Visibility.Collapsed;
+
+            ScrollViewer scroll = new ScrollViewer();
+            scroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scroll.Padding = new Thickness(26, 20, 26, 26);
+
+            StackPanel sp = new StackPanel();
+
+            helpTitle = new TextBlock();
+            helpTitle.Text = I18n.T("HelpTitle");
+            helpTitle.FontSize = 22;
+            helpTitle.FontWeight = FontWeights.SemiBold;
+            helpTitle.Foreground = Brushes.White;
+            sp.Children.Add(helpTitle);
+
+            helpSubtitle = new TextBlock();
+            helpSubtitle.Text = I18n.T("HelpSubtitle");
+            helpSubtitle.FontSize = 12;
+            helpSubtitle.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            helpSubtitle.Margin = new Thickness(0, 2, 0, 18);
+            sp.Children.Add(helpSubtitle);
+
+            AddHelpCard(sp, "\uE7F4", Color.FromRgb(56, 189, 248), "HelpMonitorsTitle", "HelpMonitorsBody");
+            AddHelpCard(sp, "\uE790", Color.FromRgb(250, 204, 21), "HelpSlidersTitle", "HelpSlidersBody");
+            AddHelpCard(sp, "\uE9E9", Color.FromRgb(52, 211, 153), "HelpPrecisionTitle", "HelpPrecisionBody");
+            AddHelpCard(sp, "\uE77B", Color.FromRgb(168, 85, 247), "HelpProfilesTitle", "HelpProfilesBody");
+            AddHelpCard(sp, "\uE823", Color.FromRgb(249, 115, 22), "HelpSchedulerTitle", "HelpSchedulerBody");
+            AddHelpCard(sp, "\uE713", Color.FromRgb(14, 165, 233), "HelpEnginesTitle", "HelpEnginesBody");
+            AddHelpCard(sp, "\uE770", Color.FromRgb(239, 68, 68), "HelpSystemTitle", "HelpSystemBody");
+
+            scroll.Content = sp;
+            g.Children.Add(scroll);
+            return g;
+        }
+
+        private void AddHelpCard(StackPanel parent, string iconGlyph, Color accentColor, string titleKey, string bodyKey) {
+            Border card = CreateDashboardCard();
+            card.Margin = new Thickness(0, 0, 0, 12);
+            card.Padding = new Thickness(18, 15, 18, 15);
+
+            Grid layout = new Grid();
+            layout.ColumnDefinitions.Add(new ColumnDefinition() { Width = GridLength.Auto });
+            layout.ColumnDefinitions.Add(new ColumnDefinition() { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border iconBox = new Border();
+            iconBox.Width = 36;
+            iconBox.Height = 36;
+            iconBox.CornerRadius = new CornerRadius(9);
+            iconBox.Background = new SolidColorBrush(Color.FromArgb(32, accentColor.R, accentColor.G, accentColor.B));
+            iconBox.BorderBrush = new SolidColorBrush(Color.FromArgb(80, accentColor.R, accentColor.G, accentColor.B));
+            iconBox.BorderThickness = new Thickness(1);
+            iconBox.VerticalAlignment = VerticalAlignment.Top;
+            iconBox.Margin = new Thickness(0, 2, 14, 0);
+
+            TextBlock ic = new TextBlock();
+            ic.Text = iconGlyph;
+            ic.FontFamily = new FontFamily("Segoe MDL2 Assets");
+            ic.FontSize = 16;
+            ic.Foreground = new SolidColorBrush(accentColor);
+            ic.HorizontalAlignment = HorizontalAlignment.Center;
+            ic.VerticalAlignment = VerticalAlignment.Center;
+            iconBox.Child = ic;
+
+            Grid.SetColumn(iconBox, 0);
+            layout.Children.Add(iconBox);
+
+            StackPanel textCol = new StackPanel();
+
+            TextBlock titleTb = new TextBlock();
+            titleTb.Text = I18n.T(titleKey);
+            titleTb.FontSize = 14;
+            titleTb.FontWeight = FontWeights.SemiBold;
+            titleTb.Foreground = Brushes.White;
+            titleTb.Margin = new Thickness(0, 0, 0, 5);
+            textCol.Children.Add(titleTb);
+
+            TextBlock bodyTb = new TextBlock();
+            bodyTb.Text = I18n.T(bodyKey);
+            bodyTb.FontSize = 12;
+            bodyTb.LineHeight = 19;
+            bodyTb.Foreground = new SolidColorBrush(Color.FromRgb(186, 198, 214));
+            bodyTb.TextWrapping = TextWrapping.Wrap;
+            textCol.Children.Add(bodyTb);
+
+            Grid.SetColumn(textCol, 1);
+            layout.Children.Add(textCol);
+
+            helpTextUpdaters.Add(delegate {
+                titleTb.Text = I18n.T(titleKey);
+                bodyTb.Text = I18n.T(bodyKey);
+            });
+
+            card.Child = layout;
+            parent.Children.Add(card);
         }
         #endregion
     }

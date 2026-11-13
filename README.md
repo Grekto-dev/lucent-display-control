@@ -1,11 +1,11 @@
 # ☼ Lucent Display Control
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-brightgreen.svg)](https://github.com/Grekto-dev/lucent-display-control/releases)
+[![Release](https://img.shields.io/badge/Release-v0.2.0-brightgreen.svg)](https://github.com/Grekto-dev/lucent-display-control/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6.svg)](https://www.microsoft.com/windows)
 [![Framework](https://img.shields.io/badge/.NET%20Framework-4.8-512BD4.svg)](https://dotnet.microsoft.com/)
 
-A modern, ultra-lightweight Windows 11 native desktop application designed for fine-grained control over **Brightness (0% to 200%), Contrast, Gamma, Color Temperature (Kelvin), and Individual RGB Channels** across all monitors.
+A modern, ultra-lightweight Windows 11 native desktop application designed for fine-grained control over **Brightness (0% to 200%), Contrast, Gamma, Color Vibrance, Color Temperature (Kelvin), and Individual RGB Channels** across all monitors.
 
 Engineered specifically for configurations where standard GPU utilities (NVIDIA Control Panel, Intel Graphics Command Center, AMD Software) fail or are unavailable—such as **DisplayLink USB docks, external USB-to-HDMI/DisplayPort adapters, integrated laptop panels, and monitors lacking physical hardware buttons**.
 
@@ -23,7 +23,7 @@ Engineered specifically for configurations where standard GPU utilities (NVIDIA 
 │ 👤 Profiles   │  ☼ Brightness          ◑ Contrast         📈 Gamma     │
 │ ⏱ Scheduler   │  [0% ──●── 200%]       [50% ──●── 150%]   [0.6 ──●── 2]│
 │ ⚙ Settings    ├────────────────────────────────────────────────────────┤
-│               │  🌡 Color Temp (6500K)  🔴 Red  🟢 Green  🔵 Blue       │
+│ ? Help        │  🌡 Color Temp (6500K)  🎨 Vibrance   🔴 R  🟢 G  🔵 B │
 │               ├────────────────────────────────────────────────────────┤
 │               │  ✦ Quick Presets: Warm · Neutral · Cool · Movie · Work │
 └───────────────┴────────────────────────────────────────────────────────┘
@@ -33,16 +33,19 @@ Engineered specifically for configurations where standard GPU utilities (NVIDIA 
 
 ## ✨ Key Features
 
-### 🔌 Universal DisplayLink & GPU Bypass
+### 🔌 Universal DisplayLink & Hybrid Engines
 - **Hybrid Composition Engine:** Utilizes the high-performance Windows Desktop Window Manager (DWM) 5×5 color transformation matrix (`MagSetFullscreenColorEffect`) combined with zero-overhead click-through layered overlays (`WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE`).
-- Works on **any** display output, bypassing the requirement for DDC/CI protocol support or proprietary GPU drivers.
+- **Hardware Gamma LUT Engine (`SetDeviceGammaRamp`):** Optional GPU/adapter-level 16-bit LUT mode ensures color, brightness, contrast, and gamma settings persist across the **Windows Start Menu, Taskbar, and UAC prompts** (with built-in DisplayLink `EnableGammaRamp` registry helper).
+- **Shell Reapply Watcher:** Event-driven `SetWinEventHook` and display-change listeners automatically keep calibrations active when switching focus or reconnecting monitors.
 
 ### 🎚 Fine-Grained Picture & Color Tuning
 - **Brightness (0% to 200%):** Standard 100% level sits at the exact center of the slider track. Slide left to dim down to complete darkness (0%), or slide right to boost luminance up to **200%**.
 - **Contrast (50% to 150%):** Midtone-preserving contrast control.
 - **Gamma (0.60 to 2.00):** Correct gamma curves with calibrated tick markers.
+- **Color Vibrance (0% to 200%):** Rec.709 perceptual saturation matrix boost, similar to NVIDIA Digital Vibrance.
 - **Color Temperature (3000 K to 9000 K):** Circadian daylight simulation from warm amber (anti-blue light eye protection) to crisp cool daylight, with neutral balanced at 6500 K.
 - **Independent RGB Gain (0 to 100):** Direct channel balance sliders for Red, Green, and Blue.
+- **Precision Entry & Quick Reset:** Click any numeric value badge to type exact numbers manually (`Enter` commits, `Esc` cancels), step sliders by **1%** with `Left`/`Right` arrow keys, or click the circular reset arrow (`⟳`) beside any value to restore its factory default.
 
 ### 🖥 Multi-Monitor Topology & Synchronization
 - Interactive monitor cards detailing model names, active resolutions (e.g., `1920 × 1080 · 60 Hz`), and display hierarchy.
@@ -65,6 +68,8 @@ Engineered specifically for configurations where standard GPU utilities (NVIDIA 
 - **Startup Integration:** Launch at Windows boot with optional indented toggle to start minimized directly to the tray.
 - **Tray Minimization:** Minimize to system tray when the window is closed, keeping the app accessible via tray icon and notification menu.
 - **Auto-Apply on Boot:** Automatically activate a chosen profile upon app launch.
+- **Run as Administrator:** Configurable UAC elevation option (via Settings toggle or one-click restart as admin) for applying system-wide gamma ramp registry settings without permission prompts.
+- **Built-in Help & Documentation Tab:** Interactive in-app manual localized across all 7 languages explaining every slider, engine mode, profile workflow, and shortcut.
 - **Reset Options:**
   - *Restore Default Presets:* Restores modified built-in presets while safely preserving all custom profiles.
   - *Erase All Data:* Complete factory reset with confirmation dialog.
@@ -123,7 +128,8 @@ del RunTests.exe
 - **`MainWindow.Logic.cs`:** Monitor enumeration (`EnumDisplayMonitors`, `GetMonitorInfo`), synchronization logic, preset transitions, tray icon integration, and memory optimization.
 - **`MainWindow.Settings.cs`:** Windows 11 Settings UI layout, language dynamic switches, startup registry integration (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), and dialog flows.
 - **`Models.cs`:** 
-  - `DwmEngine`: Computes 5×5 hardware color transformation matrices applying contrast offset, gamma midtone lift, Kelvin color temperature gains, and brightness scaling.
+  - `DwmEngine`: Computes 5×5 hardware color transformation matrices applying contrast offset, gamma midtone lift, Rec.709 color vibrance, Kelvin color temperature gains, and brightness scaling.
+  - `HardwareLutEngine`: Builds 16-bit per-channel RGB hardware gamma ramps (`SetDeviceGammaRamp`) plus `AdminHelper` UAC elevation utilities.
   - `ProfileManager`: Thread-safe persistence of user presets with atomic writes.
 - **`Overlay.cs`:** Transparent, hit-test invisible layered WPF overlay windows supporting per-monitor luminance boosts and color tinting on non-DWM displays.
 - **`AppIcon.cs`:** Embedded vector multi-resolution icon renderer (`16x16`, `24x24`, `32x32`, `48x48`, `64x64`, `128x128`, `256x256`).

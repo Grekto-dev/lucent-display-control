@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name to release (e.g. v0.1.0)'
+        description: 'Tag name to release (e.g. v0.2.0)'
         required: false
-        default: 'v0.1.0'
+        default: 'v0.2.0'
 
 permissions:
   contents: write
@@ -45,7 +45,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { "${{ github.event.inputs.tag_name }}" }
-          if (-not $tag) { $tag = "v0.1.0" }
+          if (-not $tag) { $tag = "v0.2.0" }
           $zipName = "LucentControl-$tag-win-x64.zip"
           Compress-Archive -Path "LucentControl.exe", "README.md", "LICENSE" -DestinationPath $zipName
           Write-Host "Created release package: $zipName"

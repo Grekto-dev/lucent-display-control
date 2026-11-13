@@ -66,6 +66,10 @@ namespace LucentControl {
                 settingsPerMonitor[fallback.DeviceName] = globalSettings.Clone();
             }
 
+            if (selectedMonitorIndex >= screenDevices.Count) {
+                selectedMonitorIndex = Math.Max(0, screenDevices.Count - 1);
+            }
+
             if (sidebarMonitorsCount != null) {
                 sidebarMonitorsCount.Text = I18n.T("MonitorsConnected", screenDevices.Count);
             }
@@ -362,7 +366,8 @@ namespace LucentControl {
                 specsGrid.Children.Add(CreateSpecItem(I18n.T("DesktopBounds"), string.Format("X={0}, Y={1}", sd.Bounds.X, sd.Bounds.Y)));
                 specsGrid.Children.Add(CreateSpecItem(I18n.T("RefreshRate"), string.Format("{0} Hz", sd.RefreshRate)));
                 specsGrid.Children.Add(CreateSpecItem(I18n.T("ColorDepth"), "32-bit True Color (ARGB)"));
-                specsGrid.Children.Add(CreateSpecItem(I18n.T("VideoEngine"), "Hardware DWM Composition (MagEffect)"));
+                string engineDesc = (config != null && config.UseHardwareLut) ? I18n.T("VideoEngineValueLut") : I18n.T("VideoEngineValue");
+                specsGrid.Children.Add(CreateSpecItem(I18n.T("VideoEngine"), engineDesc));
 
                 Grid.SetRow(specsGrid, 1);
                 g.Children.Add(specsGrid);
@@ -618,15 +623,23 @@ namespace LucentControl {
         #region Profile Storage & Dropdown
         public void PopulateProfilesDropdown(ComboBox cb) {
             if (cb == null) return;
-            string prev = cb.SelectedItem != null ? cb.SelectedItem.ToString() : activeProfileName;
-            cb.Items.Clear();
+            bool prevUpdating = isUpdatingUi;
+            isUpdatingUi = true;
+            try {
+                string prev = (cb == comboActiveProfile && !string.IsNullOrEmpty(activeProfileName))
+                    ? activeProfileName
+                    : (cb.SelectedItem != null ? cb.SelectedItem.ToString() : activeProfileName);
+                cb.Items.Clear();
 
-            foreach (UserProfile up in profileManager.Profiles) {
-                cb.Items.Add(up.Name);
+                foreach (UserProfile up in profileManager.Profiles) {
+                    cb.Items.Add(up.Name);
+                }
+
+                int idx = cb.Items.IndexOf(prev);
+                cb.SelectedIndex = (idx >= 0) ? idx : 0;
+            } finally {
+                isUpdatingUi = prevUpdating;
             }
-
-            int idx = cb.Items.IndexOf(prev);
-            cb.SelectedIndex = (idx >= 0) ? idx : 0;
         }
 
         public void SaveCurrentAsProfile(string name) {
@@ -642,6 +655,8 @@ namespace LucentControl {
             PopulateProfilesDropdown(comboActiveProfile);
             PopulateStartupProfilesCombo();
             RefreshProfilesList();
+            RefreshPresetsCatalog();
+            if (lblActiveProfileBanner != null) lblActiveProfileBanner.Text = string.Format(I18n.T("ActiveBanner"), activeProfileName);
             UpdateUnsavedBadge();
         }
 
@@ -662,6 +677,8 @@ namespace LucentControl {
             hasUnsavedChanges = false;
             UpdateUnsavedBadge();
             RefreshProfilesList();
+            RefreshPresetsCatalog();
+            if (lblActiveProfileBanner != null) lblActiveProfileBanner.Text = string.Format(I18n.T("ActiveBanner"), activeProfileName);
         }
 
         public void DeleteProfile(string name) {
@@ -723,7 +740,7 @@ namespace LucentControl {
         public void UpdateSchedulerUi() {
             if (lblSchedulerStatus == null) return;
             bool en = (chkEnableScheduler.IsChecked == true);
-            lblSchedulerStatus.Text = en ? "● Active: Monitoring circadian cycle" : "○ Inactive: Manual profile management";
+            lblSchedulerStatus.Text = en ? I18n.T("SchedStatusActive") : I18n.T("SchedStatusInactive");
             lblSchedulerStatus.Foreground = en ? new SolidColorBrush(Color.FromRgb(34, 197, 94)) : new SolidColorBrush(Color.FromRgb(148, 163, 184));
         }
 
@@ -836,7 +853,17 @@ namespace LucentControl {
         }
 
         private void OnSystemDisplaySettingsChanged(object sender, EventArgs e) {
-            ScheduleShellReapply();
+            if (Dispatcher != null) {
+                Dispatcher.BeginInvoke(new Action(delegate {
+                    DetectMonitors();
+                    UpdateVisualMonitorCards();
+                    if (allViews != null && allViews.Count > 1 && allViews[1].Visibility == Visibility.Visible) {
+                        UpdateMonitorsHardwareCards();
+                    }
+                    ApplyAllActiveSettings();
+                    ScheduleShellReapply();
+                }));
+            }
         }
 
         private void ScheduleShellReapply() {
@@ -883,6 +910,7 @@ namespace LucentControl {
             SetSidebarBtnContent(btnNavProfiles, "\uE77B", I18n.T("NavProfiles"), allViews != null && allViews[3].Visibility == Visibility.Visible);
             SetSidebarBtnContent(btnNavScheduler, "\uE823", I18n.T("NavScheduler"), allViews != null && allViews[4].Visibility == Visibility.Visible);
             SetSidebarBtnContent(btnNavSettings, "\uE713", I18n.T("NavSettings"), allViews != null && allViews[5].Visibility == Visibility.Visible);
+            SetSidebarBtnContent(btnNavHelp, "\uE897", I18n.T("NavHelp"), allViews != null && allViews[6].Visibility == Visibility.Visible);
 
             mainTitle.Text = I18n.T("MonitorsTitle");
             mainSubtitle.Text = I18n.T("MonitorsSubtitle");
@@ -931,6 +959,13 @@ namespace LucentControl {
             if (chkEnableScheduler != null) chkEnableScheduler.Content = I18n.T("EnableScheduler");
             if (chkSchedulerNotify != null) chkSchedulerNotify.Content = I18n.T("NotifyOnShift");
             if (btnSaveScheduler != null) btnSaveScheduler.Content = I18n.T("BtnSaveScheduler");
+            UpdateSchedulerUi();
+
+            if (helpTitle != null) helpTitle.Text = I18n.T("HelpTitle");
+            if (helpSubtitle != null) helpSubtitle.Text = I18n.T("HelpSubtitle");
+            for (int i = 0; i < helpTextUpdaters.Count; i++) {
+                helpTextUpdaters[i]();
+            }
 
             if (txtSettingsTitle != null) txtSettingsTitle.Text = I18n.T("SettingsTitle");
             if (txtSettingsSubtitle != null) txtSettingsSubtitle.Text = I18n.T("SettingsSubtitle");

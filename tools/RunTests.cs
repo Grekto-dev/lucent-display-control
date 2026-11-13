@@ -242,6 +242,41 @@ namespace LucentControl.Tests {
                 if (!reloaded.RunAsAdmin) throw new Exception("AppConfig nao persistiu RunAsAdmin");
             });
 
+            // 13. I18n Help & Version 0.2.0 Localization Completeness
+            Run("I18n: Help documentation keys and v0.2.0 localized across all 7 languages", delegate {
+                AppLanguage origLang = I18n.CurrentLanguage;
+                try {
+                    string[] keysToCheck = new string[] {
+                        "NavHelp", "Vibrance", "AboutVersion",
+                        "RunAsAdminTitle", "VideoEngineValueLut",
+                        "SchedStatusActive", "SchedStatusInactive",
+                        "HelpTitle", "HelpSubtitle",
+                        "HelpMonitorsTitle", "HelpMonitorsBody",
+                        "HelpSlidersTitle", "HelpSlidersBody",
+                        "HelpPrecisionTitle", "HelpPrecisionBody",
+                        "HelpProfilesTitle", "HelpProfilesBody",
+                        "HelpSchedulerTitle", "HelpSchedulerBody",
+                        "HelpEnginesTitle", "HelpEnginesBody",
+                        "HelpSystemTitle", "HelpSystemBody"
+                    };
+                    foreach (AppLanguage lang in Enum.GetValues(typeof(AppLanguage))) {
+                        I18n.CurrentLanguage = lang;
+                        for (int k = 0; k < keysToCheck.Length; k++) {
+                            string key = keysToCheck[k];
+                            string val = I18n.T(key);
+                            if (string.IsNullOrEmpty(val) || val == key) {
+                                throw new Exception("Missing translation for " + key + " in " + lang);
+                            }
+                        }
+                        if (!I18n.T("AboutVersion").Contains("0.2.0")) {
+                            throw new Exception("AboutVersion does not contain 0.2.0 in " + lang);
+                        }
+                    }
+                } finally {
+                    I18n.CurrentLanguage = origLang;
+                }
+            });
+
             // Limpa diretorio temporario de testes
             AppPaths.DataDirOverride = null;
             try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }

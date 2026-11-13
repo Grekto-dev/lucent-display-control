@@ -3,7 +3,7 @@ set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set WPF=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\WPF
 
 echo ========================================================
-echo   Compilando Lucent Display Control v0.1.0...
+echo   Compilando Lucent Display Control v0.2.0...
 echo ========================================================
 
 "%CSC%" /target:winexe /optimize+ /platform:anycpu ^
